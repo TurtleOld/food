@@ -1,0 +1,26 @@
+# Local scratch and Kilo state
+.scratch/
+.kilo/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Django
+*.sqlite3
+/staticfiles/
+/media/
+
+# OS
+.DS_Store
+
+.kilo/
+.scratch/
