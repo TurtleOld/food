@@ -3,7 +3,7 @@
 services:
   web:
     build: .
-    image: ${IMAGE:-kbzhu-web:latest}
+    image: ${IMAGE:-food-web:latest}
     restart: unless-stopped
     env_file:
       - path: .env
@@ -36,13 +36,13 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: traefik-public
-      traefik.http.routers.kbzhu.rule: Host(`${PUBLIC_HOST}`)
-      traefik.http.routers.kbzhu.entrypoints: websecure
-      traefik.http.routers.kbzhu.tls.certresolver: letsencrypt
-      traefik.http.services.kbzhu.loadbalancer.server.port: "8000"
+      traefik.http.routers.food.rule: Host(`${PUBLIC_HOST}`)
+      traefik.http.routers.food.entrypoints: websecure
+      traefik.http.routers.food.tls.certresolver: letsencrypt
+      traefik.http.services.food.loadbalancer.server.port: "8000"
       # Shared middleware chain on the Traefik host; set TRAEFIK_MIDDLEWARES
       # to empty to drop it.
-      traefik.http.routers.kbzhu.middlewares: "${TRAEFIK_MIDDLEWARES:-chain-public@file}"
+      traefik.http.routers.food.middlewares: "${TRAEFIK_MIDDLEWARES:-chain-public@file}"
 
 networks:
   traefik-public:
