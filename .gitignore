@@ -21,6 +21,3 @@ venv/
 
 # OS
 .DS_Store
-
-.kilo/
-.scratch/
