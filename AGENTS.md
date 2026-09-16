@@ -1,12 +1,13 @@
 ## Commands
 
-- Install deps: `pip install -r requirements.txt`
-- Install dev tooling: `pip install -r requirements-dev.txt` (adds mypy and django-stubs)
-- Run tests: `python manage.py test`
-- Lint and format: `python -m ruff check .` / `python -m ruff format --check .`
-- Typecheck: `python -m mypy .`
-- Run dev environment: `docker compose up --build` (app at http://localhost:8000)
-- Deploy prod: copy `.env.example` to `.env`, fill it in, then `docker compose -f docker-compose.prod.yml up -d --build`
+- Install deps and tools: `make install` (`uv sync`; creates `.venv`)
+- Run tests: `make test`
+- Lint and format check: `make lint` (`make format` to apply)
+- Typecheck: `make typecheck`
+- Lint + typecheck + tests: `make check`
+- Run dev environment: `make up` (app at http://localhost:8000)
+- Deploy prod: copy `.env.example` to `.env`, fill it in, then `make deploy`
+- Add a dependency: `uv add <package>` / `uv add --dev <package>`
 
 ## Agent skills
 

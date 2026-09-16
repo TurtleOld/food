@@ -16,7 +16,8 @@ services:
   web:
     build: .
     command: >
-      sh -c "python manage.py migrate &&
+      sh -c "uv sync --frozen &&
+             python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev
@@ -24,6 +25,7 @@ services:
       SECRET_KEY: dev-insecure-secret-key
     volumes:
       - .:/app
+      - /app/.venv
     ports:
       - "${DJANGO_PORT:-8000}:8000"
     depends_on:

@@ -1,19 +1,27 @@
 FROM python:3.13-slim
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 RUN useradd --create-home --uid 1000 app
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
+RUN chown app:app /app
+
+COPY --chown=app:app pyproject.toml uv.lock ./
+
+USER app
+
+RUN uv sync --frozen --no-dev
 
 COPY --chown=app:app . .
 
-USER app
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 
