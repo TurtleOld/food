@@ -1,0 +1,15 @@
+.git
+.gitignore
+.scratch
+.kilo
+.venv
+venv
+__pycache__
+*.py[cod]
+*.sqlite3
+staticfiles
+media
+.env
+.env.*
+!.env.example
+docs

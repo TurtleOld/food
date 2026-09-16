@@ -1,3 +1,11 @@
+## Commands
+
+- Install deps: `pip install -r requirements.txt`
+- Run tests: `python manage.py test`
+- Lint and format: `python -m ruff check .` / `python -m ruff format --check .`
+- Run dev environment: `docker compose up --build` (app at http://localhost:8000)
+- Deploy prod: copy `.env.example` to `.env`, fill it in, then `docker compose -f docker-compose.prod.yml up -d --build`
+
 ## Agent skills
 
 ### Issue tracker
