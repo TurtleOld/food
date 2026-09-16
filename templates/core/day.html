@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Дневник — {{ user.username }}</h1>
+  <p>Записей пока нет</p>
+  <form method="post" action="{% url 'core:logout' %}">
+    {% csrf_token %}
+    <button type="submit">Выйти</button>
+  </form>
+{% endblock %}
