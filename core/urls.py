@@ -11,6 +11,7 @@ urlpatterns = [
     path("day/<str:date>/entries/new/", views.entry_create, name="entry_create"),
     path("entries/<int:pk>/edit/", views.entry_edit, name="entry_edit"),
     path("entries/<int:pk>/delete/", views.entry_delete, name="entry_delete"),
+    path("target/", views.daily_target_edit, name="daily_target_edit"),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("healthz", views.healthz, name="healthz"),

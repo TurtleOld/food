@@ -8,8 +8,14 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from core.forms import DiaryEntryEditForm, DiaryEntryForm, ProductCreateForm, ProductEditForm
-from core.models import DiaryEntry, Product
+from core.forms import (
+    DailyTargetForm,
+    DiaryEntryEditForm,
+    DiaryEntryForm,
+    ProductCreateForm,
+    ProductEditForm,
+)
+from core.models import DailyTarget, DiaryEntry, Product
 
 
 def _parse_date(value: str) -> datetime.date:
@@ -57,12 +63,24 @@ def day(request: HttpRequest, date: str | None = None) -> HttpResponse:
         "carbs": sum((entry.carbs for entry in entries), Decimal(0)),
     }
 
+    target = DailyTarget.objects.filter(member_id=request.user.pk).first()
+    progress = None
+    if target is not None:
+        progress = {
+            "target": target,
+            "calories": totals["calories"] - target.calories,
+            "proteins": totals["proteins"] - target.proteins,
+            "fats": totals["fats"] - target.fats,
+            "carbs": totals["carbs"] - target.carbs,
+        }
+
     context = {
         "current_date": current_date,
         "previous_date": current_date - datetime.timedelta(days=1),
         "next_date": current_date + datetime.timedelta(days=1),
         "meals": meals,
         "totals": totals,
+        "progress": progress,
     }
     return render(request, "core/day.html", context)
 
@@ -116,6 +134,25 @@ def entry_delete(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("core:day_on", date=entry_date.isoformat())
     context = {"entry": entry, "cancel_url": _day_url(entry.date)}
     return render(request, "core/entry_confirm_delete.html", context)
+
+
+@login_required
+def daily_target_edit(request: HttpRequest) -> HttpResponse:
+    """Edit the signed-in member's own daily КБЖУ target."""
+    target = DailyTarget.objects.filter(member_id=request.user.pk).first()
+    if request.method == "POST":
+        form = DailyTargetForm(request.POST, instance=target)
+        if form.is_valid():
+            daily_target = form.save(commit=False)
+            daily_target.member = request.user
+            daily_target.save()
+            messages.success(request, "Цель сохранена")
+            return redirect("core:day")
+    else:
+        form = DailyTargetForm(instance=target)
+
+    context = {"form": form, "cancel_url": _day_url(datetime.date.today())}
+    return render(request, "core/daily_target_form.html", context)
 
 
 def healthz(request: HttpRequest) -> HttpResponse:

@@ -106,3 +106,20 @@ class DiaryEntry(models.Model):
     @property
     def carbs(self) -> Decimal:
         return self.amount / Decimal(100) * self.carbs_snapshot
+
+
+class DailyTarget(models.Model):
+    """Суточная цель по КБЖУ, заданная вручную и своя у каждого члена семьи."""
+
+    member = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="daily_target",
+    )
+    calories = models.DecimalField(max_digits=7, decimal_places=1)
+    proteins = models.DecimalField(max_digits=7, decimal_places=1)
+    fats = models.DecimalField(max_digits=7, decimal_places=1)
+    carbs = models.DecimalField(max_digits=7, decimal_places=1)
+
+    def __str__(self) -> str:
+        return f"Цель {self.member.username}"

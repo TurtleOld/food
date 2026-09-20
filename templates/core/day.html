@@ -69,6 +69,27 @@
     <p>Записей пока нет</p>
   {% endif %}
 
+  <section>
+    <h2>Суточная цель</h2>
+    {% if progress %}
+      <p>
+        Цель: {{ progress.target.calories|whole }} ккал ·
+        Б {{ progress.target.proteins|one_decimal }} ·
+        Ж {{ progress.target.fats|one_decimal }} ·
+        У {{ progress.target.carbs|one_decimal }}
+      </p>
+      <p>
+        Отклонение: {{ progress.calories|whole }} ккал ·
+        Б {{ progress.proteins|one_decimal }} ·
+        Ж {{ progress.fats|one_decimal }} ·
+        У {{ progress.carbs|one_decimal }}
+      </p>
+    {% else %}
+      <p>Цель не задана</p>
+    {% endif %}
+    <p><a href="{% url 'core:daily_target_edit' %}">{% if progress %}Изменить цель{% else %}Задать цель{% endif %}</a></p>
+  </section>
+
   <p><a href="{% url 'core:entry_create' current_date.isoformat %}">Добавить запись</a></p>
 
   <form method="post" action="{% url 'core:logout' %}">

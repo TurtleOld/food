@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from core.models import DiaryEntry, Product
+from core.models import DailyTarget, DiaryEntry, Product
 
 NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
 
@@ -49,3 +49,29 @@ class DiaryEntryEditForm(DiaryEntryForm):
         model = DiaryEntry
         fields = ["date", "meal_type", "amount"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
+
+
+class DailyTargetForm(forms.ModelForm):
+    """Форма суточной цели по КБЖУ, своей у каждого члена семьи."""
+
+    class Meta:
+        model = DailyTarget
+        fields = NUTRITION_FIELDS
+
+    def _clean_positive(self, field: str) -> Decimal:
+        value = self.cleaned_data[field]
+        if value <= 0:
+            raise forms.ValidationError("Значение должно быть больше нуля")
+        return value
+
+    def clean_calories(self) -> Decimal:
+        return self._clean_positive("calories")
+
+    def clean_proteins(self) -> Decimal:
+        return self._clean_positive("proteins")
+
+    def clean_fats(self) -> Decimal:
+        return self._clean_positive("fats")
+
+    def clean_carbs(self) -> Decimal:
+        return self._clean_positive("carbs")
