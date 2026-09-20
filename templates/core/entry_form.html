@@ -1,13 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <h1>Новая запись — {{ date|date:"d.m.Y" }}</h1>
+  {% if entry %}
+    <h1>Правка записи — {{ entry.product.name }}</h1>
+  {% else %}
+    <h1>Новая запись — {{ date|date:"d.m.Y" }}</h1>
+  {% endif %}
 
   <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
-    <button type="submit">Добавить</button>
+    <button type="submit">{% if entry %}Сохранить{% else %}Добавить{% endif %}</button>
   </form>
 
-  <p><a href="{% url 'core:day_on' date.isoformat %}">Отмена</a></p>
+  <p><a href="{{ cancel_url }}">Отмена</a></p>
 {% endblock %}

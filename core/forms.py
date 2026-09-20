@@ -40,3 +40,12 @@ class DiaryEntryForm(forms.ModelForm):
                 f"Количество не может быть больше {DiaryEntry.MAX_AMOUNT:g}"
             )
         return amount
+
+
+class DiaryEntryEditForm(DiaryEntryForm):
+    """Форма правки записи дневника: количество, приём пищи и дата."""
+
+    class Meta:
+        model = DiaryEntry
+        fields = ["date", "meal_type", "amount"]
+        widgets = {"date": forms.DateInput(attrs={"type": "date"})}

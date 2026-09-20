@@ -23,6 +23,7 @@
               <th>Белки</th>
               <th>Жиры</th>
               <th>Углеводы</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -34,6 +35,10 @@
                 <td>{{ entry.proteins|one_decimal }}</td>
                 <td>{{ entry.fats|one_decimal }}</td>
                 <td>{{ entry.carbs|one_decimal }}</td>
+                <td>
+                  <a href="{% url 'core:entry_edit' entry.pk %}">Править</a>
+                  <a href="{% url 'core:entry_delete' entry.pk %}">Удалить</a>
+                </td>
               </tr>
             {% endfor %}
           </tbody>
@@ -45,6 +50,7 @@
               <td>{{ meal.proteins|one_decimal }}</td>
               <td>{{ meal.fats|one_decimal }}</td>
               <td>{{ meal.carbs|one_decimal }}</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>

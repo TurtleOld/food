@@ -6,8 +6,9 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
-from core.forms import DiaryEntryForm, ProductCreateForm, ProductEditForm
+from core.forms import DiaryEntryEditForm, DiaryEntryForm, ProductCreateForm, ProductEditForm
 from core.models import DiaryEntry, Product
 
 
@@ -17,6 +18,11 @@ def _parse_date(value: str) -> datetime.date:
         return datetime.date.fromisoformat(value)
     except ValueError:
         raise Http404("Неверная дата") from None
+
+
+def _day_url(date: datetime.date) -> str:
+    """Build the URL of the day page for the given date."""
+    return reverse("core:day_on", args=[date.isoformat()])
 
 
 @login_required
@@ -78,8 +84,38 @@ def entry_create(request: HttpRequest, date: str) -> HttpResponse:
     else:
         form = DiaryEntryForm()
 
-    context = {"form": form, "date": entry_date}
+    context = {"form": form, "date": entry_date, "cancel_url": _day_url(entry_date)}
     return render(request, "core/entry_form.html", context)
+
+
+@login_required
+def entry_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Edit a diary entry belonging to the signed-in member."""
+    entry = get_object_or_404(DiaryEntry, pk=pk, member_id=request.user.pk)
+    if request.method == "POST":
+        form = DiaryEntryEditForm(request.POST, instance=entry)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Запись обновлена")
+            return redirect("core:day_on", date=form.instance.date.isoformat())
+    else:
+        form = DiaryEntryEditForm(instance=entry)
+
+    context = {"form": form, "entry": entry, "cancel_url": _day_url(entry.date)}
+    return render(request, "core/entry_form.html", context)
+
+
+@login_required
+def entry_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a diary entry belonging to the signed-in member."""
+    entry = get_object_or_404(DiaryEntry, pk=pk, member_id=request.user.pk)
+    if request.method == "POST":
+        entry_date = entry.date
+        entry.delete()
+        messages.success(request, "Запись удалена")
+        return redirect("core:day_on", date=entry_date.isoformat())
+    context = {"entry": entry, "cancel_url": _day_url(entry.date)}
+    return render(request, "core/entry_confirm_delete.html", context)
 
 
 def healthz(request: HttpRequest) -> HttpResponse:

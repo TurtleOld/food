@@ -229,3 +229,134 @@ class DayPageTotalsTest(TestCase):
         self.assertContains(response, "<td>31.0</td>")
         self.assertContains(response, "<td>3.6</td>")
         self.assertContains(response, "<td>0.0</td>")
+
+
+class DiaryEntryEditTest(TestCase):
+    def setUp(self):
+        self.member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(self.member)
+        self.chicken = Product.objects.create(
+            name="Куриная грудка",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("165.0"),
+            proteins=Decimal("31.0"),
+            fats=Decimal("3.6"),
+            carbs=Decimal("0.0"),
+            author=self.member,
+        )
+        self.today = datetime.date.today()
+        self.entry = DiaryEntry.objects.create(
+            member=self.member,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=self.chicken,
+            amount=Decimal("100"),
+        )
+
+    def _edit_url(self, entry=None):
+        return reverse("core:entry_edit", args=[(entry or self.entry).pk])
+
+    def test_editing_amount_recomputes_totals_from_snapshot(self):
+        response = self.client.post(
+            self._edit_url(),
+            {"date": self.today, "meal_type": "lunch", "amount": "200"},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("core:day_on", args=[self.today.isoformat()]))
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.amount, Decimal("200.0"))
+        self.assertEqual(self.entry.calories, Decimal("330.0"))
+
+    def test_editing_meal_type_moves_entry_to_another_meal(self):
+        self.client.post(
+            self._edit_url(),
+            {"date": self.today, "meal_type": "dinner", "amount": "100"},
+        )
+
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.meal_type, DiaryEntry.MealType.DINNER)
+
+    def test_editing_date_moves_entry_to_another_day(self):
+        new_date = self.today + datetime.timedelta(days=1)
+
+        response = self.client.post(
+            self._edit_url(),
+            {"date": new_date, "meal_type": "lunch", "amount": "100"},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("core:day_on", args=[new_date.isoformat()]))
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.date, new_date)
+
+    def test_editing_catalog_product_does_not_change_existing_entries(self):
+        self.chicken.calories = Decimal("999.0")
+        self.chicken.save()
+
+        self.entry.refresh_from_db()
+
+        self.assertEqual(self.entry.calories_snapshot, Decimal("165.0"))
+        self.assertEqual(self.entry.calories, Decimal("165.0"))
+
+    def test_cannot_edit_another_members_entry(self):
+        other = User.objects.create_user(username="bob", password="bob-pass")
+        other_entry = DiaryEntry.objects.create(
+            member=other,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=self.chicken,
+            amount=Decimal("100"),
+        )
+
+        response = self.client.get(self._edit_url(other_entry))
+
+        self.assertEqual(response.status_code, 404)
+
+
+class DiaryEntryDeleteTest(TestCase):
+    def setUp(self):
+        self.member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(self.member)
+        self.chicken = Product.objects.create(
+            name="Куриная грудка",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("165.0"),
+            proteins=Decimal("31.0"),
+            fats=Decimal("3.6"),
+            carbs=Decimal("0.0"),
+            author=self.member,
+        )
+        self.today = datetime.date.today()
+        self.entry = DiaryEntry.objects.create(
+            member=self.member,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=self.chicken,
+            amount=Decimal("100"),
+        )
+
+    def _delete_url(self, entry=None):
+        return reverse("core:entry_delete", args=[(entry or self.entry).pk])
+
+    def test_deleting_entry_removes_it_from_meal_and_day_totals(self):
+        response = self.client.post(self._delete_url(), follow=True)
+
+        self.assertRedirects(response, reverse("core:day_on", args=[self.today.isoformat()]))
+        self.assertFalse(DiaryEntry.objects.exists())
+        self.assertContains(response, "Записей пока нет")
+
+    def test_cannot_delete_another_members_entry(self):
+        other = User.objects.create_user(username="bob", password="bob-pass")
+        other_entry = DiaryEntry.objects.create(
+            member=other,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=self.chicken,
+            amount=Decimal("100"),
+        )
+
+        response = self.client.post(reverse("core:entry_delete", args=[other_entry.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(DiaryEntry.objects.filter(pk=other_entry.pk).exists())
