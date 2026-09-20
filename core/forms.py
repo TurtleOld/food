@@ -1,6 +1,8 @@
+from decimal import Decimal
+
 from django import forms
 
-from core.models import Product
+from core.models import DiaryEntry, Product
 
 NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
 
@@ -19,3 +21,22 @@ class ProductEditForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = ["name", *NUTRITION_FIELDS]
+
+
+class DiaryEntryForm(forms.ModelForm):
+    """Форма создания записи дневника: приём пищи, продукт и количество."""
+
+    class Meta:
+        model = DiaryEntry
+        fields = ["meal_type", "product", "amount"]
+
+    def clean_amount(self) -> Decimal:
+        """Отклоняет количество вне диапазона (0; MAX_AMOUNT]."""
+        amount = self.cleaned_data["amount"]
+        if amount <= 0:
+            raise forms.ValidationError("Количество должно быть больше нуля")
+        if amount > DiaryEntry.MAX_AMOUNT:
+            raise forms.ValidationError(
+                f"Количество не может быть больше {DiaryEntry.MAX_AMOUNT:g}"
+            )
+        return amount

@@ -7,6 +7,8 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.day, name="day"),
+    path("day/<str:date>/", views.day, name="day_on"),
+    path("day/<str:date>/entries/new/", views.entry_create, name="entry_create"),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("healthz", views.healthz, name="healthz"),

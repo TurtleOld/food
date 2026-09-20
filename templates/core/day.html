@@ -1,8 +1,70 @@
 {% extends "base.html" %}
+{% load nutrition %}
 
 {% block content %}
   <h1>Дневник — {{ user.username }}</h1>
-  <p>Записей пока нет</p>
+
+  <nav>
+    <a href="{% url 'core:day_on' previous_date.isoformat %}">← Предыдущий день</a>
+    <span>{{ current_date|date:"d.m.Y" }}</span>
+    <a href="{% url 'core:day_on' next_date.isoformat %}">Следующий день →</a>
+  </nav>
+
+  {% if meals %}
+    {% for meal in meals %}
+      <section>
+        <h2>{{ meal.label }}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Продукт</th>
+              <th>Количество</th>
+              <th>Ккал</th>
+              <th>Белки</th>
+              <th>Жиры</th>
+              <th>Углеводы</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in meal.entries %}
+              <tr>
+                <td>{{ entry.product.name }}</td>
+                <td>{{ entry.amount }} {{ entry.product.get_base_unit_display }}</td>
+                <td>{{ entry.calories|whole }}</td>
+                <td>{{ entry.proteins|one_decimal }}</td>
+                <td>{{ entry.fats|one_decimal }}</td>
+                <td>{{ entry.carbs|one_decimal }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Итого</td>
+              <td></td>
+              <td>{{ meal.calories|whole }}</td>
+              <td>{{ meal.proteins|one_decimal }}</td>
+              <td>{{ meal.fats|one_decimal }}</td>
+              <td>{{ meal.carbs|one_decimal }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+    {% endfor %}
+    <section>
+      <h2>Итого за день</h2>
+      <p>
+        {{ totals.calories|whole }} ккал ·
+        Б {{ totals.proteins|one_decimal }} ·
+        Ж {{ totals.fats|one_decimal }} ·
+        У {{ totals.carbs|one_decimal }}
+      </p>
+    </section>
+  {% else %}
+    <p>Записей пока нет</p>
+  {% endif %}
+
+  <p><a href="{% url 'core:entry_create' current_date.isoformat %}">Добавить запись</a></p>
+
   <form method="post" action="{% url 'core:logout' %}">
     {% csrf_token %}
     <button type="submit">Выйти</button>

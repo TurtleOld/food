@@ -1,17 +1,85 @@
+import datetime
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import ProtectedError
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from core.forms import ProductCreateForm, ProductEditForm
-from core.models import Product
+from core.forms import DiaryEntryForm, ProductCreateForm, ProductEditForm
+from core.models import DiaryEntry, Product
+
+
+def _parse_date(value: str) -> datetime.date:
+    """Parse a URL date segment, raising Http404 on a malformed value."""
+    try:
+        return datetime.date.fromisoformat(value)
+    except ValueError:
+        raise Http404("Неверная дата") from None
 
 
 @login_required
-def day(request: HttpRequest) -> HttpResponse:
-    """Render the signed-in member's personal day page."""
-    return render(request, "core/day.html")
+def day(request: HttpRequest, date: str | None = None) -> HttpResponse:
+    """Render the signed-in member's personal day page with meal totals."""
+    current_date = _parse_date(date) if date is not None else datetime.date.today()
+
+    entries = DiaryEntry.objects.filter(
+        member_id=request.user.pk, date=current_date
+    ).select_related("product")
+    meals = []
+    for meal_type, meal_label in DiaryEntry.MealType.choices:
+        meal_entries = [entry for entry in entries if entry.meal_type == meal_type]
+        if not meal_entries:
+            continue
+        meals.append(
+            {
+                "type": meal_type,
+                "label": meal_label,
+                "entries": meal_entries,
+                "calories": sum((entry.calories for entry in meal_entries), Decimal(0)),
+                "proteins": sum((entry.proteins for entry in meal_entries), Decimal(0)),
+                "fats": sum((entry.fats for entry in meal_entries), Decimal(0)),
+                "carbs": sum((entry.carbs for entry in meal_entries), Decimal(0)),
+            }
+        )
+
+    totals = {
+        "calories": sum((entry.calories for entry in entries), Decimal(0)),
+        "proteins": sum((entry.proteins for entry in entries), Decimal(0)),
+        "fats": sum((entry.fats for entry in entries), Decimal(0)),
+        "carbs": sum((entry.carbs for entry in entries), Decimal(0)),
+    }
+
+    context = {
+        "current_date": current_date,
+        "previous_date": current_date - datetime.timedelta(days=1),
+        "next_date": current_date + datetime.timedelta(days=1),
+        "meals": meals,
+        "totals": totals,
+    }
+    return render(request, "core/day.html", context)
+
+
+@login_required
+def entry_create(request: HttpRequest, date: str) -> HttpResponse:
+    """Create a diary entry for the signed-in member on the given day."""
+    entry_date = _parse_date(date)
+
+    if request.method == "POST":
+        form = DiaryEntryForm(request.POST)
+        if form.is_valid():
+            entry = form.save(commit=False)
+            entry.member = request.user
+            entry.date = entry_date
+            entry.save()
+            messages.success(request, "Запись добавлена")
+            return redirect("core:day_on", date=entry_date.isoformat())
+    else:
+        form = DiaryEntryForm()
+
+    context = {"form": form, "date": entry_date}
+    return render(request, "core/entry_form.html", context)
 
 
 def healthz(request: HttpRequest) -> HttpResponse:
