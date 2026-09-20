@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 
 from django import forms
 
@@ -58,20 +59,12 @@ class DailyTargetForm(forms.ModelForm):
         model = DailyTarget
         fields = NUTRITION_FIELDS
 
-    def _clean_positive(self, field: str) -> Decimal:
-        value = self.cleaned_data[field]
-        if value <= 0:
-            raise forms.ValidationError("Значение должно быть больше нуля")
-        return value
-
-    def clean_calories(self) -> Decimal:
-        return self._clean_positive("calories")
-
-    def clean_proteins(self) -> Decimal:
-        return self._clean_positive("proteins")
-
-    def clean_fats(self) -> Decimal:
-        return self._clean_positive("fats")
-
-    def clean_carbs(self) -> Decimal:
-        return self._clean_positive("carbs")
+    def clean(self) -> dict[str, Any] | None:
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            return cleaned_data
+        for field in NUTRITION_FIELDS:
+            value = cleaned_data.get(field)
+            if value is not None and value <= 0:
+                self.add_error(field, "Значение должно быть больше нуля")
+        return cleaned_data
