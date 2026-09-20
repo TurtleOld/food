@@ -1,8 +1,10 @@
 import datetime
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.staticfiles import finders
 from django.db.models import ProtectedError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -158,6 +160,19 @@ def daily_target_edit(request: HttpRequest) -> HttpResponse:
 def healthz(request: HttpRequest) -> HttpResponse:
     """Report that the application process is up."""
     return HttpResponse("ok")
+
+
+def service_worker(request: HttpRequest) -> HttpResponse:
+    """Serve the service worker from the origin root so its scope covers the whole app."""
+    script_path = finders.find("js/service-worker.js")
+    if script_path is None:
+        raise Http404("Service worker не найден")
+    with open(script_path, "rb") as script:
+        response = HttpResponse(script.read(), content_type="application/javascript")
+    response["Service-Worker-Allowed"] = "/"
+    if not settings.DEBUG:
+        response["Cache-Control"] = "no-cache"
+    return response
 
 
 @login_required

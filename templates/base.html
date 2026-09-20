@@ -1,13 +1,25 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}КБЖУ Трекер{% endblock %}</title>
+  <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
+  <link rel="icon" href="{% static 'icons/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+  <meta name="theme-color" content="#107a57">
 </head>
 <body>
   <main>
     {% block content %}{% endblock %}
   </main>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("{% url 'core:service_worker' %}");
+      });
+    }
+  </script>
 </body>
 </html>
