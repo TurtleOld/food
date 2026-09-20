@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Каталог продуктов</h1>
+
+  <form method="get">
+    <input type="text" name="q" value="{{ query }}" placeholder="Поиск по названию">
+    <button type="submit">Найти</button>
+  </form>
+
+  <p><a href="{% url 'core:product_create' %}">Добавить продукт</a></p>
+
+  {% if products %}
+    <table>
+      <thead>
+        <tr>
+          <th>Название</th>
+          <th>Единица</th>
+          <th>Ккал</th>
+          <th>Белки</th>
+          <th>Жиры</th>
+          <th>Углеводы</th>
+          <th>Автор</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+          <tr>
+            <td>{{ product.name }}</td>
+            <td>{{ product.get_base_unit_display }}</td>
+            <td>{{ product.calories }}</td>
+            <td>{{ product.proteins }}</td>
+            <td>{{ product.fats }}</td>
+            <td>{{ product.carbs }}</td>
+            <td>{{ product.author.username }}</td>
+            <td>
+              <a href="{% url 'core:product_edit' product.pk %}">Править</a>
+              <a href="{% url 'core:product_delete' product.pk %}">Удалить</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Продукты не найдены</p>
+  {% endif %}
+{% endblock %}
