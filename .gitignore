@@ -1,6 +1,7 @@
 # Local scratch and Kilo state
 .scratch/
 .kilo/
+.claude/
 
 # Python
 __pycache__/
@@ -11,6 +12,9 @@ venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 # Secrets
 .env

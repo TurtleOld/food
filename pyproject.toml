@@ -13,8 +13,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "coverage>=7.16.2",
     "django-stubs>=5.2,<6",
     "mypy>=1.15,<2",
+    "pre-commit>=4.6.2",
     "ruff>=0.7,<1",
 ]
 
@@ -27,7 +29,12 @@ target-version = "py313"
 extend-exclude = ["migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W", "B", "DJ"]
+select = ["E", "F", "I", "W", "B", "DJ", "D"]
+# Format of docstrings is checked; their presence is a judgement call (see AGENTS.md).
+ignore = ["D1"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
 python_version = "3.13"
@@ -49,3 +56,20 @@ disallow_incomplete_defs = false
 
 [tool.django-stubs]
 django_settings_module = "config.settings.dev"
+
+[tool.coverage.run]
+branch = true
+source = ["core", "config"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "config/asgi.py",
+    "config/wsgi.py",
+    # Prod settings are never imported by tests; CI covers them with `check --deploy`.
+    "config/settings/prod.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
