@@ -172,6 +172,13 @@ body {
   padding: 0.75rem 1rem;
 }
 
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
 .toast.is-error {
   color: var(--bulma-danger);
 }
