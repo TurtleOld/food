@@ -9,6 +9,7 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
 
 from core.models import DailyTarget, DiaryEntry, Product
+from core.undo import CannotUndo, Member, Restored, make_token, restorer
 
 
 class Macros(TypedDict):
@@ -178,3 +179,67 @@ def last_amount(
         entries = entries.exclude(pk=exclude.pk)
     latest = entries.order_by("-created_at", "-pk").first()
     return latest.amount if latest else None
+
+
+def deletion_token(entry: DiaryEntry) -> str:
+    """Токен «Вернуть» для удаляемой записи: хранит и КБЖУ-снапшот."""
+    return make_token(
+        entry.member,
+        "entry_deleted",
+        {
+            "product": entry.product_id,
+            "date": entry.date.isoformat(),
+            "meal_type": entry.meal_type,
+            "amount": str(entry.amount),
+            "calories": str(entry.calories_snapshot),
+            "proteins": str(entry.proteins_snapshot),
+            "fats": str(entry.fats_snapshot),
+            "carbs": str(entry.carbs_snapshot),
+        },
+    )
+
+
+def edit_token(entry: DiaryEntry) -> str:
+    """Токен «Вернуть» для правки: хранит значения записи до сохранения."""
+    return make_token(
+        entry.member,
+        "entry_edited",
+        {
+            "entry": entry.pk,
+            "date": entry.date.isoformat(),
+            "meal_type": entry.meal_type,
+            "amount": str(entry.amount),
+        },
+    )
+
+
+@restorer("entry_deleted")
+def _restore_deleted_entry(member: Member, payload: dict[str, str]) -> Restored:
+    if not Product.objects.filter(pk=payload["product"]).exists():
+        raise CannotUndo
+    entry = DiaryEntry.objects.create(
+        member=member,  # type: ignore[misc]
+        product_id=payload["product"],
+        date=datetime.date.fromisoformat(payload["date"]),
+        meal_type=payload["meal_type"],
+        amount=Decimal(payload["amount"]),
+    )
+    # Первое сохранение берёт снапшот из Каталога; возвращаем тот, что был у удалённой записи.
+    entry.calories_snapshot = Decimal(payload["calories"])
+    entry.proteins_snapshot = Decimal(payload["proteins"])
+    entry.fats_snapshot = Decimal(payload["fats"])
+    entry.carbs_snapshot = Decimal(payload["carbs"])
+    entry.save()
+    return Restored(entry.date)
+
+
+@restorer("entry_edited")
+def _restore_edited_entry(member: Member, payload: dict[str, str]) -> Restored:
+    updated = DiaryEntry.objects.filter(pk=payload["entry"], member_id=member.pk).update(
+        date=datetime.date.fromisoformat(payload["date"]),
+        meal_type=payload["meal_type"],
+        amount=Decimal(payload["amount"]),
+    )
+    if not updated:
+        raise CannotUndo
+    return Restored(datetime.date.fromisoformat(payload["date"]))

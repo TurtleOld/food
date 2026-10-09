@@ -26,7 +26,15 @@ from django.views.generic import (
     UpdateView,
 )
 
-from core.diary import day_summary, kcal_from_macros, last_amount, meal_slots, rings
+from core.diary import (
+    day_summary,
+    kcal_from_macros,
+    deletion_token,
+    edit_token,
+    last_amount,
+    meal_slots,
+    rings,
+)
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
@@ -34,8 +42,14 @@ from core.forms import (
     ProductCreateForm,
     ProductEditForm,
 )
-from core.htmx import FragmentMixin, HtmxLoginRequiredMixin, sheet_saved_response
+from core.htmx import (
+    FragmentMixin,
+    HtmxLoginRequiredMixin,
+    sheet_saved_response,
+    with_toasts,
+)
 from core.models import DailyTarget, DiaryEntry, Product
+from core.undo import add_undo_message, restore
 
 QUICK_AMOUNTS = (50, 100, 150, 200)
 
@@ -132,10 +146,11 @@ class EntryUpdateView(OwnEntryMixin, FragmentMixin, UpdateView):
         entry = super().get_object(queryset)
         # Форма меняет instance при валидации; лента после сохранения — того дня, откуда открыли.
         self.opened_from_date = entry.date
+        self.undo_token = edit_token(entry)
         return entry
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
-        messages.success(self.request, "Запись обновлена")
+        add_undo_message(self.request, "Запись обновлена", self.undo_token)
         response = super().form_valid(form)
         if not self.request.htmx:  # type: ignore[attr-defined]
             return response
@@ -177,14 +192,24 @@ class EntryPreviewView(OwnEntryMixin, DetailView):
 
 
 class EntryDeleteView(OwnEntryMixin, DeleteView):
-    """Удаляет запись дневника текущего участника после подтверждения."""
+    """Удаляет запись дневника текущего участника.
+
+    Из шторки (htmx) удаляет сразу и предлагает «Вернуть»; без JS — через страницу подтверждения.
+    """
 
     template_name = "core/entry_confirm_delete.html"
     context_object_name = "entry"
 
     def form_valid(self, form: Form) -> HttpResponse:
-        messages.success(self.request, "Запись удалена")
-        return super().form_valid(form)
+        entry = self.object
+        if not self.request.htmx:  # type: ignore[attr-defined]
+            messages.success(self.request, "Запись удалена")
+            return super().form_valid(form)
+        token = deletion_token(entry)
+        entry.delete()
+        add_undo_message(self.request, "Запись удалена", token)
+        context = _day_context(self.request.user, entry.date)
+        return sheet_saved_response(self.request, "core/day.html#feed", context, "#feed")
 
     def get_success_url(self) -> str:
         return _day_url(self.object.date)
@@ -193,6 +218,26 @@ class EntryDeleteView(OwnEntryMixin, DeleteView):
         context = super().get_context_data(**kwargs)
         context["cancel_url"] = _day_url(self.object.date)
         return context
+
+
+class UndoView(HtmxLoginRequiredMixin, View):
+    """Применяет подписанный снимок из тоста «Вернуть»."""
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        restored = restore(request.user, request.POST.get("token", ""))
+        if restored is None:
+            messages.error(request, "Уже нельзя вернуть")
+        else:
+            messages.success(request, "Возвращено")
+        day = restored.date if restored and restored.date else datetime.date.today()
+        if not request.htmx:  # type: ignore[attr-defined]
+            return redirect(_day_url(day))
+        if restored is None or restored.date is None:
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, request)
+        context = _day_context(request.user, day)
+        return sheet_saved_response(request, "core/day.html#feed", context, "#feed")
 
 
 class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
