@@ -28,9 +28,9 @@ from django.views.generic import (
 
 from core.diary import (
     day_summary,
-    kcal_from_macros,
     deletion_token,
     edit_token,
+    kcal_from_macros,
     last_amount,
     meal_slots,
     rings,
