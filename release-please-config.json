@@ -6,7 +6,6 @@
   "packages": {
     ".": {
       "package-name": "food",
-      "initial-version": "0.0.1",
       "extra-files": [
         {
           "type": "toml",

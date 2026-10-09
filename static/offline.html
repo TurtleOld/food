@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Нет сети · КБЖУ Трекер</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; text-align: center;
+           font-family: system-ui, sans-serif; background: #f7f9fa; color: #1f2933; }
+    button { font: inherit; padding: .6em 1.4em; border: 0; border-radius: 999px; background: #33a37a; color: #fff; cursor: pointer; }
+    @media (prefers-color-scheme: dark) { body { background: #16181d; color: #e6e9ed; } }
+  </style>
+</head>
+<body>
+  <main>
+    <svg width="96" height="96" viewBox="0 0 512 512" aria-hidden="true"><circle cx="256" cy="256" r="150" fill="none" stroke="#e3e8ec" stroke-width="56"/><path d="M256 106A150 150 0 1 1 106 256" fill="none" stroke="#33a37a" stroke-width="56" stroke-linecap="round"/></svg>
+    <h1>Нет сети</h1>
+    <p>Дневник откроется, когда появится соединение.</p>
+    <button type="button" onclick="location.reload()">Повторить</button>
+  </main>
+</body>
+</html>
