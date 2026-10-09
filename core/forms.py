@@ -14,6 +14,7 @@ class ProductFieldsForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs.setdefault("class", "input")
         for name in NUTRITION_FIELDS:
             self.fields[name].widget.attrs.update(
                 {"class": "input num", "step": "0.1", "min": "0", "inputmode": "decimal"}
@@ -23,7 +24,12 @@ class ProductFieldsForm(forms.ModelForm):
         required=False,
         label="Цифры штрихкода",
         widget=forms.TextInput(
-            attrs={"class": "input num", "inputmode": "numeric", "autocomplete": "off"}
+            attrs={
+                "class": "input num",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "8, 12 или 13 цифр",
+            }
         ),
     )
     transfer = forms.BooleanField(required=False)

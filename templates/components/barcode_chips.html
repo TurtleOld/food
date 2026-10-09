@@ -3,7 +3,7 @@
   {% for barcode in product.barcodes.all %}
     <span class="chip num">▦ {{ barcode.code }}
       <button type="button" class="delete is-small" aria-label="Отвязать {{ barcode.code }}"
-              hx-post="{% url 'core:barcode_unbind' barcode.pk %}" hx-params="none" hx-target="#barcodes" hx-swap="outerHTML">×</button>
+              hx-post="{% url 'core:barcode_unbind' barcode.pk %}" hx-params="none" hx-target="#barcodes" hx-swap="outerHTML"></button>
     </span>
   {% endfor %}
 </div>
