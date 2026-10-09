@@ -158,11 +158,10 @@ class DayPageTotalsTest(TestCase):
         )
         self.today = datetime.date.today()
 
-    def test_empty_meals_are_hidden(self):
+    def test_empty_day_shows_every_meal_as_quiet_add_row(self):
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Записей пока нет")
-        self.assertNotContains(response, "Завтрак")
+        self.assertContains(response, "· добавить", count=5)
 
     def test_meal_and_day_totals_match_sum_of_entries(self):
         DiaryEntry.objects.create(
@@ -182,8 +181,7 @@ class DayPageTotalsTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Обед")
-        self.assertNotContains(response, "Завтрак")
+        self.assertContains(response, "· добавить", count=4)
         meal = response.context["meals"][0]
         self.assertEqual(meal["calories"], Decimal("525.0"))
         self.assertEqual(response.context["totals"]["calories"], Decimal("525.0"))
@@ -200,7 +198,7 @@ class DayPageTotalsTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Записей пока нет")
+        self.assertContains(response, "· добавить", count=5)
 
     def test_navigating_to_next_and_previous_day(self):
         response = self.client.get(reverse("core:day"))
@@ -225,10 +223,10 @@ class DayPageTotalsTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "<td>165</td>")
-        self.assertContains(response, "<td>31.0</td>")
-        self.assertContains(response, "<td>3.6</td>")
-        self.assertContains(response, "<td>0.0</td>")
+        self.assertContains(response, ">165<")
+        self.assertContains(response, "Б 31.0")
+        self.assertContains(response, "Ж 3.6")
+        self.assertContains(response, "У 0.0")
 
 
 class DiaryEntryEditTest(TestCase):
@@ -344,7 +342,7 @@ class DiaryEntryDeleteTest(TestCase):
 
         self.assertRedirects(response, reverse("core:day_on", args=[self.today.isoformat()]))
         self.assertFalse(DiaryEntry.objects.exists())
-        self.assertContains(response, "Записей пока нет")
+        self.assertContains(response, "· добавить", count=5)
 
     def test_cannot_delete_another_members_entry(self):
         other = User.objects.create_user(username="bob", password="bob-pass")
