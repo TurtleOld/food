@@ -1,23 +1,19 @@
 from django.http import HttpRequest
 
-_SECTIONS = {
+_SECTION_BY_PREFIX = {
+    "": "diary",
     "day": "diary",
-    "day_on": "diary",
-    "entry_create": "diary",
-    "entry_search": "diary",
-    "entry_draft_preview": "diary",
-    "entry_edit": "diary",
-    "entry_preview": "diary",
-    "entry_delete": "diary",
-    "product_list": "products",
-    "product_create": "products",
-    "product_edit": "products",
-    "product_delete": "products",
-    "daily_target_edit": "target",
+    "entries": "diary",
+    "undo": "diary",
+    "products": "products",
+    "barcodes": "products",
+    "target": "target",
 }
 
 
 def nav(request: HttpRequest) -> dict[str, str]:
-    """Определяет раздел навигации, который подсвечивается для текущей страницы."""
-    match = request.resolver_match
-    return {"nav_section": _SECTIONS.get(match.url_name or "", "") if match else ""}
+    """Определяет раздел навигации по первому сегменту пути, чтобы новые маршруты не терялись."""
+    if request.resolver_match is None:
+        return {"nav_section": ""}
+    prefix = request.path.strip("/").split("/")[0]
+    return {"nav_section": _SECTION_BY_PREFIX.get(prefix, "")}
