@@ -15,6 +15,11 @@ urlpatterns = [
         views.EntryDraftPreviewView.as_view(),
         name="entry_draft_preview",
     ),
+    path(
+        "day/<str:date>/entries/new-product/",
+        views.EntryProductCreateView.as_view(),
+        name="entry_product_new",
+    ),
     path("entries/<int:pk>/edit/", views.EntryUpdateView.as_view(), name="entry_edit"),
     path("entries/<int:pk>/preview/", views.EntryPreviewView.as_view(), name="entry_preview"),
     path("entries/<int:pk>/delete/", views.EntryDeleteView.as_view(), name="entry_delete"),
