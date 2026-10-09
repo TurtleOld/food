@@ -15,7 +15,7 @@ from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
-from core.diary import day_summary, meal_slots, rings
+from core.diary import day_summary, kcal_from_macros, meal_slots, rings
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
@@ -155,6 +155,10 @@ class DailyTargetUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context["cancel_url"] = _day_url(datetime.date.today())
+        target = self.object
+        context["has_target"] = target is not None
+        if target is not None:
+            context["macro_kcal"] = kcal_from_macros(target.proteins, target.fats, target.carbs)
         return context
 
 
