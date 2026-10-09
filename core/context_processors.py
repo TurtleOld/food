@@ -5,6 +5,7 @@ _SECTIONS = {
     "day_on": "diary",
     "entry_create": "diary",
     "entry_edit": "diary",
+    "entry_preview": "diary",
     "entry_delete": "diary",
     "product_list": "products",
     "product_create": "products",

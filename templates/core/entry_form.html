@@ -1,17 +1,65 @@
 {% extends "base.html" %}
+{% load l10n nutrition %}
 
 {% block content %}
   {% if entry %}
-    <h1>Правка записи — {{ entry.product.name }}</h1>
+    {% partialdef form inline %}
+    <form id="form" class="sheet-form" method="post" action="{{ request.path }}"
+          {% if request.htmx %}x-data hx-post="{{ request.path }}" hx-target="#form" hx-swap="outerHTML"{% endif %}>
+      {% csrf_token %}
+      <h2 class="title is-4 mb-1">{{ entry.product.name }}</h2>
+      <p class="muted is-size-7 mb-4">КБЖУ на {{ entry.amount|unlocalize }} {{ entry.product.get_base_unit_display }} считается по записи, а не по Каталогу</p>
+
+      {{ form.non_field_errors }}
+      <div class="amount">
+        <input class="amount-input num" type="number" name="amount" step="0.1" min="0" inputmode="decimal"
+               value="{{ form.amount.value|default_if_none:''|unlocalize }}" x-ref="amount" aria-label="Количество, {{ entry.product.get_base_unit_display }}"
+               hx-get="{% url 'core:entry_preview' entry.pk %}" hx-trigger="input changed delay:300ms" hx-target="#macros" hx-swap="outerHTML">
+        <span class="muted">{{ entry.product.get_base_unit_display }}</span>
+      </div>
+      {% for error in form.amount.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+      <div class="quick-amounts">
+        {% if last_amount %}
+          <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|floatformat:"-1u" }}</button>
+        {% endif %}
+        {% for amount in quick_amounts %}
+          <button type="button" class="chip" data-amount="{{ amount }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">{{ amount }}</button>
+        {% endfor %}
+      </div>
+
+      {% partialdef macros inline %}
+      <div id="macros" class="macros-row num">
+        <span class="macro" style="--dot: var(--kcal)"><b>{% if macros %}{{ macros.calories|whole }}{% else %}—{% endif %}</b> ккал</span>
+        <span class="macro" style="--dot: var(--p)"><b>{% if macros %}{{ macros.proteins|one_decimal }}{% else %}—{% endif %}</b> Б</span>
+        <span class="macro" style="--dot: var(--f)"><b>{% if macros %}{{ macros.fats|one_decimal }}{% else %}—{% endif %}</b> Ж</span>
+        <span class="macro" style="--dot: var(--c)"><b>{% if macros %}{{ macros.carbs|one_decimal }}{% else %}—{% endif %}</b> У</span>
+      </div>
+      {% endpartialdef %}
+
+      <div class="chips" role="radiogroup" aria-label="Приём пищи">
+        {% for radio in form.meal_type %}
+          <label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+        {% endfor %}
+      </div>
+      {% for error in form.meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+      <label class="field-day">
+        <span class="muted is-size-7">День</span>
+        {{ form.date }}
+      </label>
+      {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+      <button class="button is-primary is-fullwidth mt-5" type="submit">Сохранить</button>
+    </form>
+    {% endpartialdef %}
+    <p><a href="{{ cancel_url }}">Отмена</a></p>
   {% else %}
     <h1>Новая запись — {{ date|date:"d.m.Y" }}</h1>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">Добавить</button>
+    </form>
+    <p><a href="{{ cancel_url }}">Отмена</a></p>
   {% endif %}
-
-  <form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">{% if entry %}Сохранить{% else %}Добавить{% endif %}</button>
-  </form>
-
-  <p><a href="{{ cancel_url }}">Отмена</a></p>
 {% endblock %}
