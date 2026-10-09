@@ -7,9 +7,10 @@
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}КБЖУ Трекер{% endblock %}</title>
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
-  <link rel="icon" href="{% static 'icons/icon-192.png' %}">
-  <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
-  <meta name="theme-color" content="#107a57">
+  <link rel="icon" href="{% static 'icons/favicon.svg' %}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <meta name="theme-color" content="#f7f9fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181d" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="{% static 'vendor/bulma/bulma-1.0.4.min.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'vendor/htmx/htmx-2.0.11.min.js' %}"></script>
@@ -31,7 +32,7 @@
       </form>
     </header>
   {% endif %}
-  <main class="page">
+  <main class="page{% block page_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
   {% if user.is_authenticated %}
