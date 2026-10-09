@@ -1,0 +1,15 @@
+{% load static %}
+{% comment %}Полоса камеры сканера и строки отказа. Внутри `x-data="scanner"` (static/js/scanner.js). Контекст: `field` (селектор поля для кода), `where` («в поиск» / «в поле»).{% endcomment %}
+<div id="scanner-strip" data-scanner data-field="{{ field }}"
+     data-polyfill="{% static 'vendor/barcode-detector/barcode-detector-3.2.2-polyfill.js' %}"
+     data-wasm="{% static 'vendor/zxing-wasm/zxing_reader-3.1.3.wasm' %}">
+  <div class="scan-strip" x-show="stripOpen" x-cloak>
+    <video x-ref="video" playsinline muted></video>
+    <div class="scan-msg" x-show="cam === 'asking'">Разрешите доступ к камере в окне браузера</div>
+    <button type="button" class="scan-off" @click="stop()" aria-label="Выключить камеру">× выключить</button>
+    <label class="scan-photo">📷 фото<input type="file" accept="image/*" capture="environment" hidden @change="photo($event)"></label>
+  </div>
+  <p class="scan-note" x-show="cam === 'denied'" x-cloak>Нет доступа к камере — разрешите её в настройках браузера. Или введите цифры штрихкода {{ where }}. <button type="button" class="scan-link" @click="start()">Ещё раз</button></p>
+  <p class="scan-note" x-show="cam === 'nocam' || cam === 'insecure'" x-cloak><span x-text="cam === 'nocam' ? 'Камеры нет' : 'Камера работает только по HTTPS'"></span> — введите цифры или <label class="scan-link">загрузите фото<input type="file" accept="image/*" capture="environment" hidden @change="photo($event)"></label>.</p>
+  <p class="scan-note" x-show="photoNote" x-text="photoNote" x-cloak></p>
+</div>

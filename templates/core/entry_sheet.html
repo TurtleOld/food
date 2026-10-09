@@ -7,7 +7,7 @@
     <p class="muted is-size-7 mb-2">Штрихкод</p>
     {% if code_search.code %}
       {% if code_search.product %}
-        <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ code_search.product.pk }}&meal={{ meal }}&hour={{ hour }}&code={{ code_search.code }}"
+        <a class="result" data-catalog href="{% url 'core:entry_create' date.isoformat %}?product={{ code_search.product.pk }}&meal={{ meal }}&hour={{ hour }}&code={{ code_search.code }}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ code_search.product.pk }}&meal={{ meal }}&hour={{ hour }}&code={{ code_search.code }}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ code_search.product.name }} <span class="chip">▦ в каталоге</span></span>
           <span class="entry-detail is-size-7 muted">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
@@ -82,8 +82,9 @@
 {% endpartialdef %}
 
 {% partialdef search inline %}
-<div class="sheet-step" x-data>
+<div class="sheet-step" x-data="scanner({ auto: {% if request.GET.scan %}true{% else %}false{% endif %} })">
   <h2 class="title is-4 mb-3">{% if bind %}Привязать ▦ {{ bind }} к продукту{% else %}Что съели?{% endif %}</h2>
+  <div class="searchrow">
   <input class="input" type="search" name="q" autocomplete="off" autofocus
          placeholder="Название или цифры штрихкода" aria-label="Поиск продукта"
          hx-get="{% url 'core:entry_search' date.isoformat %}" hx-trigger="input changed delay:250ms, search"
@@ -91,6 +92,11 @@
          hx-on::before-request="const wait = document.getElementById('search-wait'); const digits = this.value.replace(/\s/g, ''); wait.hidden = !/^\d{6,}$/.test(digits); document.getElementById('search-wait-query').textContent = digits"
          hx-on::after-request="document.getElementById('search-wait').hidden = true" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}", "bind": "{{ bind }}"}'
          @keydown.enter.prevent="$root.querySelector('.result')?.click()">
+  {% if not bind %}
+    <button type="button" class="btn-quiet scan-toggle" aria-label="Сканер штрихкода" :aria-pressed="cam !== 'off'" @click="toggle()">{% include "components/icons/scan.html" %}</button>
+  {% endif %}
+  </div>
+  {% if not bind %}{% include "components/scanner_strip.html" with field="input[name=q]" where="в поиск" %}{% endif %}
   <p id="search-wait" class="muted is-size-7 mt-2" hidden>⏳ Ищем <span id="search-wait-query"></span> в каталоге и Open Food Facts</p>
   <div class="mt-4">
     {% include "core/entry_sheet.html#results" with query="" products=None meal=request.GET.meal hour=request.GET.hour bind=bind %}
