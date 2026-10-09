@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load l10n %}
 
 {% block content %}
   <div class="page-head"><h1 class="title is-3">Суточная цель</h1></div>
@@ -8,10 +9,10 @@
 
   <form method="post" class="box"
         x-data="{
-          k: '{{ form.calories.value|default_if_none:'' }}',
-          p: '{{ form.proteins.value|default_if_none:'' }}',
-          f: '{{ form.fats.value|default_if_none:'' }}',
-          c: '{{ form.carbs.value|default_if_none:'' }}',
+          k: '{{ form.calories.value|default_if_none:''|unlocalize }}',
+          p: '{{ form.proteins.value|default_if_none:''|unlocalize }}',
+          f: '{{ form.fats.value|default_if_none:''|unlocalize }}',
+          c: '{{ form.carbs.value|default_if_none:''|unlocalize }}',
           kcal() {
             const n = (v) => parseFloat(String(v).replace(',', '.'));
             const [p, f, c] = [n(this.p), n(this.f), n(this.c)];
@@ -23,25 +24,25 @@
     {{ form.non_field_errors }}
     <label class="goal-row" for="id_calories">
       <span class="lbl"><span class="dot" style="background: var(--kcal)"></span>Калории</span>
-      <input type="text" inputmode="decimal" name="calories" id="id_calories" value="{{ form.calories.value|default_if_none:'' }}" x-model="k" required>
+      <input type="text" inputmode="decimal" name="calories" id="id_calories" value="{{ form.calories.value|default_if_none:''|unlocalize }}" x-model="k" required>
       <span class="unit">ккал</span>
     </label>
     {% for error in form.calories.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
     <label class="goal-row" for="id_proteins">
       <span class="lbl"><span class="dot" style="background: var(--p)"></span>Белки</span>
-      <input type="text" inputmode="decimal" name="proteins" id="id_proteins" value="{{ form.proteins.value|default_if_none:'' }}" x-model="p" required>
+      <input type="text" inputmode="decimal" name="proteins" id="id_proteins" value="{{ form.proteins.value|default_if_none:''|unlocalize }}" x-model="p" required>
       <span class="unit">г</span>
     </label>
     {% for error in form.proteins.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
     <label class="goal-row" for="id_fats">
       <span class="lbl"><span class="dot" style="background: var(--f)"></span>Жиры</span>
-      <input type="text" inputmode="decimal" name="fats" id="id_fats" value="{{ form.fats.value|default_if_none:'' }}" x-model="f" required>
+      <input type="text" inputmode="decimal" name="fats" id="id_fats" value="{{ form.fats.value|default_if_none:''|unlocalize }}" x-model="f" required>
       <span class="unit">г</span>
     </label>
     {% for error in form.fats.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
     <label class="goal-row" for="id_carbs">
       <span class="lbl"><span class="dot" style="background: var(--c)"></span>Углеводы</span>
-      <input type="text" inputmode="decimal" name="carbs" id="id_carbs" value="{{ form.carbs.value|default_if_none:'' }}" x-model="c" required>
+      <input type="text" inputmode="decimal" name="carbs" id="id_carbs" value="{{ form.carbs.value|default_if_none:''|unlocalize }}" x-model="c" required>
       <span class="unit">г</span>
     </label>
     {% for error in form.carbs.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
