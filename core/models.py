@@ -33,6 +33,22 @@ class Product(models.Model):
         return self.name
 
 
+class Barcode(models.Model):
+    """Штрихкод упаковки; уникален в Каталоге, поэтому скан находит ровно один Продукт.
+
+    Хранится нормализованным: 8 цифр (EAN-8) или 13 (EAN-13, UPC-A с ведущим нулём).
+    """
+
+    code = models.CharField(max_length=13, unique=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="barcodes")
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self) -> str:
+        return self.code
+
+
 class DiaryEntry(models.Model):
     """Съеденный продукт с количеством, отнесённый к приёму пищи внутри дня."""
 

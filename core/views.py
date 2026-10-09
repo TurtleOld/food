@@ -15,6 +15,7 @@ from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -29,7 +30,8 @@ from django.views.generic import (
 from django_htmx.http import trigger_client_event
 
 from core.catalog import deletion_token as product_deletion_token
-from core.catalog import entries_count
+from core.catalog import entries_count, search_catalog
+from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
     addition_token,
     day_summary,
@@ -57,7 +59,7 @@ from core.htmx import (
     sheet_saved_response,
     with_toasts,
 )
-from core.models import DailyTarget, DiaryEntry, Product
+from core.models import Barcode, DailyTarget, DiaryEntry, Product
 from core.undo import add_undo_message, restore
 
 QUICK_AMOUNTS = (50, 100, 150, 200)
@@ -476,9 +478,9 @@ class ServiceWorkerView(View):
 
 def _catalog_context(query: str = "") -> dict[str, Any]:
     """Контекст фрагмента списка Каталога: совпадения с запросом и общее число продуктов."""
-    products = Product.objects.all()
+    products = Product.objects.prefetch_related("barcodes")
     if query:
-        products = products.filter(pk__in=[product.pk for product in search_products(query)])
+        products = products.filter(pk__in=[product.pk for product in search_catalog(query)])
     return {"products": products, "total": Product.objects.count(), "query": query}
 
 
@@ -562,6 +564,28 @@ class ProductUpdateView(HtmxLoginRequiredMixin, CatalogSheetMixin, UpdateView):
         context = super().get_context_data(**kwargs)
         context["usage"] = entries_count(self.object)
         return context
+
+
+class BarcodeUnbindView(HtmxLoginRequiredMixin, DeleteView):
+    """Отвязывает Штрихкод от Продукта сразу и предлагает «Вернуть»."""
+
+    model = Barcode
+    http_method_names = ["post"]
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        barcode: Barcode = self.object
+        product = barcode.product
+        token = barcode_unbind_token(barcode, self.request.user)
+        barcode.delete()
+        add_undo_message(self.request, "Штрихкод отвязан", token)
+        if not self.request.htmx:  # type: ignore[attr-defined]
+            return redirect("core:product_edit", pk=product.pk)
+        html = render_to_string(
+            "components/barcode_chips.html", {"product": product}, request=self.request
+        )
+        response = with_toasts(HttpResponse(html), self.request)
+        trigger_client_event(response, "catalog:changed")
+        return response
 
 
 class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
