@@ -335,7 +335,7 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CreateView
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
-        product: Product = self.object  # type: ignore[assignment]
+        product: Product = self.object
         carried = {key: value for key, value in self._carried().items() if key != "code"}
         query = urlencode({"product": product.pk, **carried})
         return f"{reverse('core:entry_create', args=[self.entry_date.isoformat()])}?{query}"
