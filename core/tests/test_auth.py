@@ -25,7 +25,7 @@ class LoginTest(TestCase):
         )
 
         self.assertContains(response, "alice")
-        self.assertContains(response, "Записей пока нет")
+        self.assertContains(response, "· добавить", count=5)
 
     def test_login_returns_to_requested_page(self):
         response = self.client.post(
@@ -50,6 +50,54 @@ class LoginTest(TestCase):
             self.client.get(reverse("core:day")),
             f"{reverse('core:login')}?next={reverse('core:day')}",
         )
+
+    def test_login_page_shows_brand_and_form_fields(self):
+        response = self.client.get(reverse("core:login"))
+
+        self.assertContains(response, "КБЖУ")
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, 'name="password" ')
+        self.assertContains(response, 'autocomplete="current-password"')
+
+    def test_wrong_password_shows_error_in_form(self):
+        response = self.client.post(
+            reverse("core:login"),
+            {"username": "alice", "password": "not-the-password"},
+        )
+
+        self.assertContains(response, "Неверное имя пользователя или пароль")
+        self.assertContains(response, 'value="alice"')
+
+    def test_login_page_keeps_next_for_the_form(self):
+        target = reverse("core:product_list")
+
+        response = self.client.get(f"{reverse('core:login')}?next={target}")
+
+        self.assertContains(response, f'name="next" value="{target}"')
+
+    def test_failed_login_keeps_next(self):
+        target = reverse("core:product_list")
+
+        response = self.client.post(
+            reverse("core:login"),
+            {"username": "alice", "password": "bad", "next": target},
+        )
+
+        self.assertContains(response, f'name="next" value="{target}"')
+
+    def test_next_survives_client_redirect_to_login(self):
+        """Целевой адрес из HX-Redirect доходит до входа и возвращает назад."""
+        target = reverse("core:product_list")
+        login_url = f"{reverse('core:login')}?next={target}"
+
+        page = self.client.get(login_url)
+        response = self.client.post(
+            login_url,
+            {"username": "alice", "password": "s3cret-pass", "next": target},
+        )
+
+        self.assertContains(page, f'name="next" value="{target}"')
+        self.assertRedirects(response, target)
 
     def test_logout_ends_session(self):
         self.client.force_login(self.member)

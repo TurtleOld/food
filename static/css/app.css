@@ -175,3 +175,334 @@ body {
 .toast.is-error {
   color: var(--bulma-danger);
 }
+
+.goal-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 0;
+}
+
+.goal-row + .goal-row {
+  border-top: 1px solid var(--bulma-border-weak);
+}
+
+.goal-row .lbl {
+  flex: 1;
+  color: var(--bulma-text-strong);
+}
+
+.goal-row input {
+  width: 7rem;
+  text-align: right;
+  border: 0;
+  background: var(--bulma-background);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--bulma-text-strong);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.goal-row .unit {
+  width: 2.2rem;
+  color: var(--bulma-text-weak);
+  font-size: 0.85rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+/* Day page */
+.day-layout {
+  max-width: 68rem;
+  margin: 0 auto;
+}
+
+.feed-block {
+  display: block;
+}
+
+.datebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.datebar .day {
+  text-align: center;
+}
+
+.datebar input[type="date"] {
+  border: 0;
+  background: none;
+  color: var(--bulma-text-weak);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.summary {
+  margin-bottom: 1.5rem;
+}
+
+.ring {
+  position: relative;
+  display: inline-block;
+}
+
+.ring svg {
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+}
+
+.ring .track {
+  stroke: var(--ring-track);
+}
+
+.ring .bar {
+  stroke-linecap: round;
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: var(--bulma-text-strong);
+}
+
+.ring-value {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.macros {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 2rem;
+}
+
+.macros .item {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+}
+
+.quick-add {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.quick-add-prompt {
+  flex: 1;
+  padding: 0.8rem 1.1rem;
+  border-radius: 999px;
+  background: var(--bulma-scheme-main);
+  box-shadow: var(--soft-shadow);
+  color: var(--bulma-text-weak);
+}
+
+.timeline {
+  position: relative;
+  padding-left: 2.25rem;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.7rem;
+  top: 1rem;
+  bottom: 1rem;
+  width: 2px;
+  background: var(--bulma-border-weak);
+  border-radius: 1px;
+}
+
+.slot {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.slot > .node {
+  position: absolute;
+  left: -1.95rem;
+  top: 1.85rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--kcal);
+  box-shadow: 0 0 0 5px var(--page);
+}
+
+.slot.is-empty > .node {
+  background: var(--bulma-border);
+  top: 0.95rem;
+}
+
+.entry {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 0;
+  color: inherit;
+}
+
+.entry + .entry {
+  border-top: 1px solid var(--bulma-border-weak);
+}
+
+.entry-name {
+  display: block;
+  font-weight: 500;
+}
+
+.entry-detail {
+  display: block;
+}
+
+.entry-kcal {
+  font-weight: 600;
+}
+
+.add-slot {
+  display: block;
+  padding: 0.6rem 0;
+  color: var(--bulma-text-weak);
+}
+
+.add-slot:hover {
+  color: var(--bulma-text-strong);
+}
+
+@media (min-width: 1024px) {
+  .feed-block {
+    display: contents;
+  }
+
+  .day-layout {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    column-gap: 3rem;
+    align-items: start;
+  }
+
+  .datebar {
+    grid-column: 1;
+  }
+
+  .summary-col {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .summary {
+    position: sticky;
+    top: 1.5rem;
+  }
+
+  .feed-col {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Login: full-bleed halves, so the page container and tab-bar padding are dropped. */
+.page.is-bare {
+  max-width: none;
+  padding: 0;
+}
+
+body:has(.login) {
+  padding-bottom: 0;
+}
+
+.field-quiet {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--bulma-scheme-main);
+  color: var(--bulma-text-strong);
+  box-shadow: var(--soft-shadow);
+  border-radius: var(--bulma-radius);
+  padding: 0.85rem 1rem;
+  font: inherit;
+}
+
+.field-quiet:focus {
+  outline: 2px solid var(--kcal);
+}
+
+.btn-main {
+  display: block;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  background: var(--kcal);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+  border-radius: var(--bulma-radius);
+}
+
+.login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.login-brand {
+  display: grid;
+  place-items: center;
+  padding: 2.5rem 1.5rem;
+  background: color-mix(in srgb, var(--kcal) 10%, var(--page));
+}
+
+.login-form {
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.5rem;
+}
+
+.login-form form {
+  width: 100%;
+  max-width: 21rem;
+}
+
+.login-ring .ring-track {
+  stroke: var(--ring-track);
+}
+
+.login-ring .ring-arc {
+  stroke: var(--kcal);
+}
+
+.login-error {
+  color: var(--bulma-danger);
+  font-size: 0.875rem;
+  margin: 0 0 0.75rem 0.75rem;
+}
+
+@media (min-width: 900px) {
+  .login {
+    grid-template-columns: 1.1fr 1fr;
+  }
+}
