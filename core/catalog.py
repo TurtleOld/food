@@ -9,6 +9,7 @@ from django.db.models import Q
 from core.barcodes import normalize_barcode
 from core.diary import search_products
 from core.models import Barcode, Product
+from core.off import OffLookup, lookup
 from core.undo import CannotUndo, Member, Restored, make_token, restorer
 
 
@@ -102,7 +103,8 @@ CODE_QUERY_MIN_DIGITS = 6
 class CodeSearch:
     """Исход поиска по цифрам Штрихкода в шторке записи.
 
-    `code` задан только у полного валидного кода; `product` — Продукт, которому он принадлежит.
+    `code` задан только у полного валидного кода; `product` — Продукт, которому он принадлежит,
+    а `off` — ответ Open Food Facts, если кода нет в Каталоге.
     У неполного кода `note` объясняет, что идёт поиск по префиксу, и `products` — его совпадения.
     """
 
@@ -110,6 +112,7 @@ class CodeSearch:
     product: Product | None
     note: str
     products: list[Product]
+    off: OffLookup | None = None
 
 
 def search_by_code(query: str) -> CodeSearch | None:
@@ -126,4 +129,6 @@ def search_by_code(query: str) -> CodeSearch | None:
             products=search_catalog(digits),
         )
     barcode = Barcode.objects.select_related("product").filter(code=code).first()
-    return CodeSearch(code=code, product=barcode.product if barcode else None, note="", products=[])
+    if barcode:
+        return CodeSearch(code=code, product=barcode.product, note="", products=[])
+    return CodeSearch(code=code, product=None, note="", products=[], off=lookup(code))
