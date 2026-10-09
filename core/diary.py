@@ -156,3 +156,8 @@ def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
         pct = min(100, int(value / goal * 100)) if goal else 0
         result.append(Ring(label=label, value=value, goal=goal, pct=pct, over=value > goal))
     return result
+
+
+def kcal_from_macros(proteins: Decimal, fats: Decimal, carbs: Decimal) -> Decimal:
+    """Считает калорийность по БЖУ: Б×4 + Ж×9 + У×4."""
+    return proteins * 4 + fats * 9 + carbs * 4

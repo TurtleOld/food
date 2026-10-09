@@ -176,6 +176,50 @@ body {
   color: var(--bulma-danger);
 }
 
+.goal-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 0;
+}
+
+.goal-row + .goal-row {
+  border-top: 1px solid var(--bulma-border-weak);
+}
+
+.goal-row .lbl {
+  flex: 1;
+  color: var(--bulma-text-strong);
+}
+
+.goal-row input {
+  width: 7rem;
+  text-align: right;
+  border: 0;
+  background: var(--bulma-background);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--bulma-text-strong);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.goal-row .unit {
+  width: 2.2rem;
+  color: var(--bulma-text-weak);
+  font-size: 0.85rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+
 /* Login: full-bleed halves, so the page container and tab-bar padding are dropped. */
 .page.is-bare {
   max-width: none;
