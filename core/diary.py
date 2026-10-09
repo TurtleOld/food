@@ -97,7 +97,7 @@ def day_summary(member: AbstractBaseUser | AnonymousUser, date: datetime.date) -
     return DaySummary(meals=meals, totals=totals, progress=progress)
 
 
-class Slot(TypedDict):
+class MealRow(TypedDict):
     """Приём пищи ленты дня: заполненный или пустой."""
 
     type: str
@@ -122,13 +122,13 @@ class Ring:
     over: bool
 
 
-def meal_slots(meals: list[Meal]) -> list[Slot]:
+def meal_rows(meals: list[Meal]) -> list[MealRow]:
     """Дополняет заполненные Приёмы пищи пустыми до всех пяти в порядке `MealType`."""
     by_type = {meal["type"]: meal for meal in meals}
-    slots: list[Slot] = []
+    rows: list[MealRow] = []
     for meal_type, meal_label in DiaryEntry.MealType.choices:
         meal = by_type.get(meal_type)
-        slots.append(
+        rows.append(
             {
                 "type": meal_type,
                 "label": meal_label,
@@ -136,7 +136,7 @@ def meal_slots(meals: list[Meal]) -> list[Slot]:
                 "calories": meal["calories"] if meal else Decimal(0),
             }
         )
-    return slots
+    return rows
 
 
 def rings(totals: Macros, progress: Progress | None) -> list[Ring]:

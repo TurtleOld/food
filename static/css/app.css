@@ -422,12 +422,12 @@ body:has(.login) {
   border-radius: 1px;
 }
 
-.slot {
+.meal-row {
   position: relative;
   margin-bottom: 1.5rem;
 }
 
-.slot > .node {
+.meal-row > .node {
   position: absolute;
   left: -1.95rem;
   top: 1.85rem;
@@ -438,7 +438,7 @@ body:has(.login) {
   box-shadow: 0 0 0 5px var(--page);
 }
 
-.slot.is-empty > .node {
+.meal-row.is-empty > .node {
   background: var(--bulma-border);
   top: 0.95rem;
 }
@@ -469,13 +469,13 @@ body:has(.login) {
   font-weight: 600;
 }
 
-.add-slot {
+.add-meal {
   display: block;
   padding: 0.6rem 0;
   color: var(--bulma-text-weak);
 }
 
-.add-slot:hover {
+.add-meal:hover {
   color: var(--bulma-text-strong);
 }
 

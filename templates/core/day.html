@@ -48,16 +48,16 @@
            hx-get="{% url 'core:entry_create' current_date.isoformat %}?scan=1" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true" aria-label="Сканер штрихкода">{% include "components/icons/barcode.html" %}</a>
       </div>
       <div class="timeline">
-        {% for slot in slots %}
-          <div class="slot{% if not slot.entries %} is-empty{% endif %}">
+        {% for row in meal_rows %}
+          <div class="meal-row{% if not row.entries %} is-empty{% endif %}">
             <span class="node"></span>
-            {% if slot.entries %}
+            {% if row.entries %}
               <div class="box">
                 <div class="level is-mobile mb-1">
-                  <h2 class="title is-5 mb-0">{{ slot.label }}</h2>
-                  <span class="muted num">{{ slot.calories|whole }} ккал</span>
+                  <h2 class="title is-5 mb-0">{{ row.label }}</h2>
+                  <span class="muted num">{{ row.calories|whole }} ккал</span>
                 </div>
-                {% for entry in slot.entries %}
+                {% for entry in row.entries %}
                   <a class="entry" href="{% url 'core:entry_edit' entry.pk %}"
                      hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true">
                     <span>
@@ -67,12 +67,12 @@
                     <span class="entry-kcal num">{{ entry.calories|whole }}</span>
                   </a>
                 {% endfor %}
-                <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ slot.type }}"
-                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ slot.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="muted">+ добавить</span></a>
+                <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ row.type }}"
+                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ row.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="muted">+ добавить</span></a>
               </div>
             {% else %}
-              <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ slot.type }}"
-                 hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ slot.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ slot.label }}</span> <span class="muted">· добавить</span></a>
+              <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ row.type }}"
+                 hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ row.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ row.label }}</span> <span class="muted">· добавить</span></a>
             {% endif %}
           </div>
         {% endfor %}
