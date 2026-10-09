@@ -23,7 +23,7 @@
             <a class="entry" href="{% url 'core:product_edit' product.pk %}"
                hx-get="{% url 'core:product_edit' product.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">
               <span>
-                <span class="entry-name">{{ product.name }}</span>
+                <span class="entry-name">{{ product.name }}{% if product.barcodes.all %} <span class="muted" title="Есть штрихкод">▦</span>{% endif %}</span>
                 <span class="entry-detail is-size-7 muted num">Б {{ product.proteins|one_decimal }} · Ж {{ product.fats|one_decimal }} · У {{ product.carbs|one_decimal }}</span>
               </span>
               <span class="entry-kcal num">{{ product.calories|whole }} <small class="muted">ккал / 100 {{ product.get_base_unit_display }}</small></span>
