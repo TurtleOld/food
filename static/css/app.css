@@ -628,3 +628,17 @@ body:has(.login) {
   gap: 0.25rem;
   margin-top: 1rem;
 }
+
+.result {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--bulma-border-weak);
+  color: var(--bulma-text);
+}
+
+.result:first-of-type {
+  font-weight: 600;
+}

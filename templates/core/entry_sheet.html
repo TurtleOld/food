@@ -1,0 +1,96 @@
+{% load nutrition %}
+{% comment %}Шаги шторки добавления записи: поиск, результаты и количество. Страницы нет — только фрагменты.{% endcomment %}
+
+{% partialdef results inline %}
+<div id="search-results">
+  {% if query %}
+    {% for product in products %}
+      <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}"
+         hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+        <span class="entry-name">{{ product.name }}</span>
+        <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+      </a>
+    {% empty %}
+      <p class="muted">Ничего не найдено</p>
+    {% endfor %}
+  {% else %}
+    {% if recent %}<p class="muted is-size-7 mb-2">Недавние</p>{% endif %}
+    {% for item in recent %}
+      <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}"
+         hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+        <span class="entry-name">{{ item.product.name }}</span>
+        <span class="entry-detail is-size-7 muted num">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span>
+      </a>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endpartialdef %}
+
+{% partialdef search inline %}
+<div class="sheet-step" x-data>
+  <h2 class="title is-4 mb-3">Что съели?</h2>
+  <input class="input" type="search" name="q" autocomplete="off" autofocus
+         placeholder="Название или цифры штрихкода" aria-label="Поиск продукта"
+         hx-get="{% url 'core:entry_search' date.isoformat %}" hx-trigger="input changed delay:250ms, search"
+         hx-target="#search-results" hx-swap="outerHTML" hx-include="this" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}"}'
+         @keydown.enter.prevent="$root.querySelector('.result')?.click()">
+  <div class="mt-4">
+    {% include "core/entry_sheet.html#results" with query="" products=None meal=request.GET.meal hour=request.GET.hour %}
+  </div>
+</div>
+{% endpartialdef %}
+
+{% partialdef macros inline %}
+<div id="macros" class="macros-row num">
+  <span class="macro" style="--dot: var(--kcal)"><b>{% if macros %}{{ macros.calories|whole }}{% else %}—{% endif %}</b> ккал</span>
+  <span class="macro" style="--dot: var(--p)"><b>{% if macros %}{{ macros.proteins|one_decimal }}{% else %}—{% endif %}</b> Б</span>
+  <span class="macro" style="--dot: var(--f)"><b>{% if macros %}{{ macros.fats|one_decimal }}{% else %}—{% endif %}</b> Ж</span>
+  <span class="macro" style="--dot: var(--c)"><b>{% if macros %}{{ macros.carbs|one_decimal }}{% else %}—{% endif %}</b> У</span>
+</div>
+{% endpartialdef %}
+
+{% partialdef amount inline %}
+<form id="form" class="sheet-form" method="post" action="{% url 'core:entry_create' date.isoformat %}"
+      x-data="{ meal: '{{ meal_label|lower }}' }" hx-post="{% url 'core:entry_create' date.isoformat %}" hx-target="#form" hx-swap="outerHTML">
+  {% csrf_token %}
+  {{ form.product }}
+  <h2 class="title is-4 mb-1">{{ product.name }}</h2>
+  {% if product %}<p class="muted is-size-7 mb-4">КБЖУ на 100 {{ product.get_base_unit_display }}: {{ product.calories|whole }} ккал</p>{% endif %}
+
+  {{ form.non_field_errors }}
+  {% for error in form.product.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+  <div class="amount">
+    <input class="amount-input num" type="number" name="amount" step="0.1" min="0" inputmode="decimal" autofocus
+           value="{{ form.amount.value|floatformat:"-1u" }}" x-ref="amount" aria-label="Количество, {{ product.get_base_unit_display }}"
+           hx-get="{% url 'core:entry_draft_preview' date.isoformat %}" hx-include="[name=product]" hx-trigger="input changed delay:300ms" hx-target="#macros" hx-swap="outerHTML">
+    <span class="muted">{{ product.get_base_unit_display }}</span>
+  </div>
+  {% for error in form.amount.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+  <div class="quick-amounts">
+    {% if last_amount %}
+      <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|floatformat:"-1u" }}</button>
+    {% endif %}
+    {% for quick in quick_amounts %}
+      <button type="button" class="chip" data-amount="{{ quick }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">{{ quick }}</button>
+    {% endfor %}
+  </div>
+
+  {% include "core/entry_sheet.html#macros" %}
+
+  <div class="chips" role="radiogroup" aria-label="Приём пищи"
+       @change="meal = $event.target.nextElementSibling.textContent.trim().toLowerCase()">
+    {% for radio in form.meal_type %}
+      <label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+    {% endfor %}
+  </div>
+  {% for error in form.meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+  <label class="field-day">
+    <span class="muted is-size-7">День</span>
+    {{ form.date }}
+  </label>
+  {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+  <button class="button is-primary is-fullwidth mt-5" type="submit">Добавить в <span x-text="meal">{{ meal_label|lower }}</span></button>
+</form>
+{% endpartialdef %}
