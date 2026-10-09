@@ -13,7 +13,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse, reverse_lazy
 from django.views import View
@@ -27,18 +27,23 @@ from django.views.generic import (
 )
 
 from core.diary import (
+    addition_token,
     day_summary,
     deletion_token,
     edit_token,
     kcal_from_macros,
     last_amount,
+    meal_for_hour,
     meal_slots,
+    recent_products,
     rings,
+    search_products,
 )
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
     DiaryEntryForm,
+    DiaryEntrySheetForm,
     ProductCreateForm,
     ProductEditForm,
 )
@@ -52,6 +57,7 @@ from core.models import DailyTarget, DiaryEntry, Product
 from core.undo import add_undo_message, restore
 
 QUICK_AMOUNTS = (50, 100, 150, 200)
+DEFAULT_AMOUNT = 100
 
 
 def _parse_date(value: str) -> datetime.date:
@@ -60,6 +66,14 @@ def _parse_date(value: str) -> datetime.date:
         return datetime.date.fromisoformat(value)
     except ValueError:
         raise Http404("Неверная дата") from None
+
+
+def _pk(value: Any) -> int:
+    """Разбирает pk из запроса; мусор даёт 0, то есть «не найдено»."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _day_url(date: datetime.date) -> str:
@@ -110,20 +124,63 @@ class OwnEntryMixin(HtmxLoginRequiredMixin):
 
 
 class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
-    """Создаёт запись дневника текущего участника на заданный день."""
+    """Создаёт запись дневника текущего участника на заданный день.
 
-    form_class = DiaryEntryForm
+    Без htmx это обычная страница с формой. Из шторки GET без `product` — шаг поиска,
+    с `product` — шаг количества, а POST отвечает лентой дня и тостом с «Вернуть».
+    """
+
     template_name = "core/entry_form.html"
 
     def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
         super().setup(request, *args, **kwargs)
         self.entry_date = _parse_date(kwargs["date"])
 
+    @property
+    def in_sheet(self) -> bool:
+        return bool(self.request.htmx)  # type: ignore[attr-defined]
+
+    def get_form_class(self) -> type[ModelForm[Any]]:
+        return DiaryEntrySheetForm if self.in_sheet else DiaryEntryForm
+
+    def get_template_names(self) -> list[str]:
+        if not self.in_sheet:
+            return super().get_template_names()
+        if self.request.method == "GET" and "product" not in self.request.GET:
+            return ["core/entry_sheet.html#search"]
+        return ["core/entry_sheet.html#amount"]
+
+    def _meal(self) -> str:
+        meal = self.request.GET.get("meal", "")
+        if meal in DiaryEntry.MealType.values:
+            return meal
+        try:
+            hour = int(self.request.GET["hour"])
+        except (KeyError, ValueError):
+            hour = datetime.datetime.now().hour
+        return meal_for_hour(min(max(hour, 0), 23))
+
+    def get_initial(self) -> dict[str, Any]:
+        initial: dict[str, Any] = {"date": self.entry_date, "meal_type": self._meal()}
+        if "product" in self.request.GET:
+            product = get_object_or_404(Product, pk=_pk(self.request.GET["product"]))
+            initial["product"] = product.pk
+            initial["amount"] = last_amount(self.request.user, product) or DEFAULT_AMOUNT
+        return initial
+
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         form.instance.member = self.request.user
-        form.instance.date = self.entry_date
-        messages.success(self.request, "Запись добавлена")
-        return super().form_valid(form)
+        if not self.in_sheet:
+            form.instance.date = self.entry_date
+            messages.success(self.request, "Запись добавлена")
+            return super().form_valid(form)
+        super().form_valid(form)
+        entry: DiaryEntry = form.instance
+        amount = f"{entry.amount:g} {entry.product.get_base_unit_display()}"
+        text = f"{entry.product.name}, {amount} → {entry.get_meal_type_display()}"
+        add_undo_message(self.request, text, addition_token(entry))
+        context = _day_context(self.request.user, self.entry_date)
+        return sheet_saved_response(self.request, "core/day.html#feed", context, "#feed")
 
     def get_success_url(self) -> str:
         return _day_url(self.entry_date)
@@ -131,6 +188,71 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context.update(date=self.entry_date, cancel_url=_day_url(self.entry_date))
+        if self.in_sheet:
+            form = context["form"]
+            product = Product.objects.filter(pk=_pk(form["product"].value())).first()
+            context.update(
+                meal_label=DiaryEntry.MealType(form["meal_type"].value() or self._meal()).label,
+                product=product,
+                last_amount=last_amount(self.request.user, product) if product else None,
+                quick_amounts=QUICK_AMOUNTS,
+                recent=recent_products(self.request.user),
+            )
+            if product:
+                context["macros"] = _draft_entry(product, form["amount"].value())
+        return context
+
+
+def _draft_entry(product: Product, amount: Any) -> DiaryEntry | None:
+    """Несохранённая запись для показа КБЖУ; `None`, если количество не проходит валидацию."""
+    form = DiaryEntrySheetForm(
+        {
+            "date": datetime.date.today(),
+            "meal_type": DiaryEntry.MealType.LUNCH,
+            "product": product.pk,
+            "amount": amount or "",
+        }
+    )
+    if not form.is_valid():
+        return None
+    entry = form.instance
+    entry.calories_snapshot = product.calories
+    entry.proteins_snapshot = product.proteins
+    entry.fats_snapshot = product.fats
+    entry.carbs_snapshot = product.carbs
+    return entry
+
+
+class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
+    """Фрагмент результатов шага поиска: «Недавние» при пустом запросе, иначе совпадения."""
+
+    template_name = "core/entry_sheet.html#results"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        query = self.request.GET.get("q", "").strip()
+        context.update(
+            date=_parse_date(self.kwargs["date"]),
+            meal=self.request.GET.get("meal", ""),
+            hour=self.request.GET.get("hour", ""),
+            query=query,
+        )
+        if query:
+            context["products"] = search_products(query)
+        else:
+            context["recent"] = recent_products(self.request.user)
+        return context
+
+
+class EntryDraftPreviewView(HtmxLoginRequiredMixin, TemplateView):
+    """Живой пересчёт КБЖУ ещё не созданной записи по текущему Каталогу."""
+
+    template_name = "core/entry_sheet.html#macros"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        product = get_object_or_404(Product, pk=_pk(self.request.GET.get("product")))
+        context["macros"] = _draft_entry(product, self.request.GET.get("amount"))
         return context
 
 
@@ -326,10 +448,7 @@ class ProductListView(HtmxLoginRequiredMixin, ListView):
         query = self.query()
         if not query:
             return products
-        needle = query.lower()
-        # SQLite lower()/icontains не сворачивают регистр кириллицы, поэтому фильтруем в Python.
-        matching_ids = [product.pk for product in products if needle in product.name.lower()]
-        return products.filter(pk__in=matching_ids)
+        return products.filter(pk__in=[product.pk for product in search_products(query)])
 
     def query(self) -> str:
         return self.request.GET.get("q", "").strip()

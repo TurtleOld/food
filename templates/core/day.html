@@ -42,7 +42,8 @@
 
     <div class="feed-col">
       <div class="quick-add">
-        <a class="quick-add-prompt" href="{% url 'core:entry_create' current_date.isoformat %}">Что съели?</a>
+        <a class="quick-add-prompt" href="{% url 'core:entry_create' current_date.isoformat %}"
+           hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true">Что съели?</a>
         <a class="btn-quiet" href="{% url 'core:entry_create' current_date.isoformat %}" aria-label="Сканер штрихкода">{% include "components/icons/barcode.html" %}</a>
       </div>
       <div class="timeline">
@@ -65,9 +66,12 @@
                     <span class="entry-kcal num">{{ entry.calories|whole }}</span>
                   </a>
                 {% endfor %}
+                <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ slot.type }}"
+                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ slot.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="muted">+ добавить</span></a>
               </div>
             {% else %}
-              <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}"><span class="has-text-weight-medium">{{ slot.label }}</span> <span class="muted">· добавить</span></a>
+              <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ slot.type }}"
+                 hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ slot.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ slot.label }}</span> <span class="muted">· добавить</span></a>
             {% endif %}
           </div>
         {% endfor %}

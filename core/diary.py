@@ -243,3 +243,63 @@ def _restore_edited_entry(member: Member, payload: dict[str, str]) -> Restored:
     if not updated:
         raise CannotUndo
     return Restored(datetime.date.fromisoformat(payload["date"]))
+
+
+def meal_for_hour(hour: int) -> str:
+    """Приём пищи по часу суток: до 10 завтрак, до 12 второй завтрак, до 15 обед, до 18 полдник."""
+    meal_type = DiaryEntry.MealType
+    if hour < 10:
+        return meal_type.BREAKFAST
+    if hour < 12:
+        return meal_type.SECOND_BREAKFAST
+    if hour < 15:
+        return meal_type.LUNCH
+    if hour < 18:
+        return meal_type.AFTERNOON_SNACK
+    return meal_type.DINNER
+
+
+@dataclass(frozen=True)
+class RecentProduct:
+    """Недавно съеденный продукт и количество, с которым его ели в последний раз."""
+
+    product: Product
+    amount: Decimal
+
+
+def recent_products(member: Member, limit: int = 8) -> list[RecentProduct]:
+    """Продукты из записей участника: последний съеденный первым, каждый один раз."""
+    entries = (
+        DiaryEntry.objects.filter(member_id=member.pk)
+        .select_related("product")
+        .order_by("-created_at", "-pk")
+    )
+    recent: dict[int, RecentProduct] = {}
+    for entry in entries.iterator():
+        if entry.product_id not in recent:
+            recent[entry.product_id] = RecentProduct(entry.product, entry.amount)
+            if len(recent) == limit:
+                break
+    return list(recent.values())
+
+
+def search_products(query: str) -> list[Product]:
+    """Продукты Каталога, в названии которых есть `query` без учёта регистра."""
+    needle = query.strip().lower()
+    # SQLite lower()/icontains не сворачивают регистр кириллицы, поэтому фильтруем в Python.
+    return [product for product in Product.objects.all() if needle in product.name.lower()]
+
+
+def addition_token(entry: DiaryEntry) -> str:
+    """Токен «Вернуть» для добавленной записи: возврат удаляет именно её."""
+    return make_token(
+        entry.member, "entry_added", {"entry": entry.pk, "date": entry.date.isoformat()}
+    )
+
+
+@restorer("entry_added")
+def _restore_added_entry(member: Member, payload: dict[str, str]) -> Restored:
+    deleted, _ = DiaryEntry.objects.filter(pk=payload["entry"], member_id=member.pk).delete()
+    if not deleted:
+        raise CannotUndo
+    return Restored(datetime.date.fromisoformat(payload["date"]))

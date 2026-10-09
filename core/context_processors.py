@@ -4,6 +4,8 @@ _SECTIONS = {
     "day": "diary",
     "day_on": "diary",
     "entry_create": "diary",
+    "entry_search": "diary",
+    "entry_draft_preview": "diary",
     "entry_edit": "diary",
     "entry_preview": "diary",
     "entry_delete": "diary",
