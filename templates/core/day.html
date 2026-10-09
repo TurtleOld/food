@@ -64,7 +64,7 @@
                       <span class="entry-name">{{ entry.product.name }}</span>
                       <span class="entry-detail is-size-7 muted">{{ entry.amount }} {{ entry.product.get_base_unit_display }} · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
                     </span>
-                    <span class="entry-kcal num">{{ entry.calories|whole }}</span>
+                    <span class="entry-kcal num">{{ entry.calories|whole }} <small class="muted">ккал</small></span>
                   </a>
                 {% endfor %}
                 <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"

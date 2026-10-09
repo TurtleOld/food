@@ -84,6 +84,9 @@ class DayPageLanguageDTest(TestCase):
 
         self.assertContains(response, "Куриная грудка")
         self.assertContains(response, "330 ккал")
+        self.assertContains(
+            response, 'class="entry-kcal num">330 <small class="muted">ккал</small>'
+        )
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()

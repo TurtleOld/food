@@ -671,10 +671,12 @@ body:has(.login) {
   color: var(--bulma-text-strong);
 }
 
+.entry-kcal {
+  white-space: nowrap;
+}
+
 .entry-kcal small {
-  display: block;
   font-weight: 400;
-  text-align: right;
 }
 
 /* Scanner: slim camera strip above the result list; refusal rows sit under the field. */
