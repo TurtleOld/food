@@ -648,3 +648,28 @@ body:has(.login) {
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
+
+/* Catalog: quiet search bar and per-100 caption in a row. */
+.findbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.35rem 0.5rem 0.35rem 1.1rem;
+  border-radius: 999px;
+  background: var(--bulma-scheme-main);
+  box-shadow: var(--soft-shadow);
+}
+
+.findbar input {
+  all: unset;
+  flex: 1;
+  padding: 0.5rem 0;
+  color: var(--bulma-text-strong);
+}
+
+.entry-kcal small {
+  display: block;
+  font-weight: 400;
+  text-align: right;
+}

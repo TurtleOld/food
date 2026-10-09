@@ -26,7 +26,10 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
+from django_htmx.http import trigger_client_event
 
+from core.catalog import deletion_token as product_deletion_token
+from core.catalog import entries_count
 from core.diary import (
     addition_token,
     day_summary,
@@ -389,6 +392,8 @@ class UndoView(HtmxLoginRequiredMixin, View):
         if restored is None or restored.date is None:
             response = HttpResponse()
             response["HX-Reswap"] = "none"
+            if restored is not None:
+                trigger_client_event(response, "catalog:changed")
             return with_toasts(response, request)
         context = _day_context(request.user, day)
         return sheet_saved_response(request, "core/day.html#feed", context, "#feed")
@@ -469,42 +474,75 @@ class ServiceWorkerView(View):
         return response
 
 
-class ProductListView(HtmxLoginRequiredMixin, ListView):
+def _catalog_context(query: str = "") -> dict[str, Any]:
+    """Контекст фрагмента списка Каталога: совпадения с запросом и общее число продуктов."""
+    products = Product.objects.all()
+    if query:
+        products = products.filter(pk__in=[product.pk for product in search_products(query)])
+    return {"products": products, "total": Product.objects.count(), "query": query}
+
+
+class ProductListView(HtmxLoginRequiredMixin, FragmentMixin, ListView):
     """Общий Каталог продуктов с фильтром по названию."""
 
     template_name = "core/product_list.html"
+    fragment_template_name = "core/product_list.html#catalog"
     context_object_name = "products"
 
     def get_queryset(self) -> QuerySet[Product]:
-        products = Product.objects.select_related("author")
-        query = self.query()
-        if not query:
-            return products
-        return products.filter(pk__in=[product.pk for product in search_products(query)])
+        return _catalog_context(self.query())["products"]
 
     def query(self) -> str:
         return self.request.GET.get("q", "").strip()
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context["query"] = self.query()
+        context.update(total=Product.objects.count(), query=self.query())
         return context
 
 
-class ProductCreateView(HtmxLoginRequiredMixin, CreateView):
+class CatalogSheetMixin:
+    """Продукт Каталога в шторке при htmx-запросе; без htmx остаётся обычная страница."""
+
+    request: HttpRequest
+
+    @property
+    def in_sheet(self) -> bool:
+        return bool(self.request.htmx)  # type: ignore[attr-defined]
+
+    def get_template_names(self) -> list[str]:
+        if self.in_sheet:
+            return ["core/catalog_sheet.html"]
+        return super().get_template_names()  # type: ignore[misc]
+
+    def saved(self, text: str) -> HttpResponse:
+        """Ответ шторки на успешное сохранение: свежий список, тост, закрытие."""
+        messages.success(self.request, text)
+        return sheet_saved_response(
+            self.request, "core/product_list.html#catalog", _catalog_context(), "#catalog"
+        )
+
+
+class ProductCreateView(HtmxLoginRequiredMixin, CatalogSheetMixin, CreateView):
     """Создаёт продукт Каталога с автором из текущего участника."""
 
     form_class = ProductCreateForm
     template_name = "core/product_form.html"
     success_url = reverse_lazy("core:product_list")
 
+    def get_initial(self) -> dict[str, Any]:
+        return {"name": self.request.GET.get("name", "").strip()}
+
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         form.instance.author = self.request.user
+        if self.in_sheet:
+            form.save()
+            return self.saved("Продукт создан")
         messages.success(self.request, "Продукт создан")
         return super().form_valid(form)
 
 
-class ProductUpdateView(HtmxLoginRequiredMixin, UpdateView):
+class ProductUpdateView(HtmxLoginRequiredMixin, CatalogSheetMixin, UpdateView):
     """Редактирует любой продукт Каталога; базовая единица остаётся прежней."""
 
     model = Product
@@ -514,12 +552,23 @@ class ProductUpdateView(HtmxLoginRequiredMixin, UpdateView):
     success_url = reverse_lazy("core:product_list")
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        if self.in_sheet:
+            form.save()
+            return self.saved("Продукт обновлён")
         messages.success(self.request, "Продукт обновлён")
         return super().form_valid(form)
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["usage"] = entries_count(self.object)
+        return context
+
 
 class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
-    """Удаляет продукт Каталога, если на него не ссылаются записи дневника."""
+    """Удаляет продукт Каталога, если на него не ссылаются записи дневника.
+
+    Из шторки (htmx) удаляет сразу и предлагает «Вернуть»; без JS — через страницу подтверждения.
+    """
 
     model = Product
     template_name = "core/product_confirm_delete.html"
@@ -527,6 +576,8 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
     success_url = reverse_lazy("core:product_list")
 
     def form_valid(self, form: Form) -> HttpResponse:
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return self._delete_from_sheet()
         try:
             response = super().form_valid(form)
         except ProtectedError:
@@ -537,3 +588,17 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
             return redirect(self.success_url)
         messages.success(self.request, "Продукт удалён")
         return response
+
+    def _delete_from_sheet(self) -> HttpResponse:
+        product: Product = self.object
+        if entries_count(product):
+            messages.error(self.request, "Удалить нельзя — продукт есть в записях дневника")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
+        token = product_deletion_token(product, self.request.user)
+        product.delete()
+        add_undo_message(self.request, "Продукт удалён", token)
+        return sheet_saved_response(
+            self.request, "core/product_list.html#catalog", _catalog_context(), "#catalog"
+        )

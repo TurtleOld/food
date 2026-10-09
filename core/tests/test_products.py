@@ -142,7 +142,9 @@ class ProductEditTest(TestCase):
     def test_product_author_is_shown_in_list(self):
         self.client.force_login(self.bob)
 
-        response = self.client.get(reverse("core:product_list"))
+        response = self.client.get(
+            reverse("core:product_edit", args=[self.product.pk]), headers={"HX-Request": "true"}
+        )
 
         self.assertContains(response, "Гречка")
         self.assertContains(response, "alice")
