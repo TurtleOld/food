@@ -94,3 +94,8 @@ def day_summary(member: AbstractBaseUser | AnonymousUser, date: datetime.date) -
             "carbs": totals["carbs"] - target.carbs,
         }
     return DaySummary(meals=meals, totals=totals, progress=progress)
+
+
+def kcal_from_macros(proteins: Decimal, fats: Decimal, carbs: Decimal) -> Decimal:
+    """Считает калорийность по БЖУ: Б×4 + Ж×9 + У×4."""
+    return proteins * 4 + fats * 9 + carbs * 4

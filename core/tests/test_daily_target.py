@@ -139,3 +139,51 @@ class DailyTargetProgressTest(TestCase):
         response = self.client.get(reverse("core:daily_target_edit"))
 
         self.assertContains(response, "2000.0")
+
+
+class DailyTargetPageTest(TestCase):
+    def setUp(self):
+        self.member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(self.member)
+
+    def test_page_without_target_explains_what_it_enables(self):
+        response = self.client.get(reverse("core:daily_target_edit"))
+
+        self.assertContains(response, "Задайте — и на странице дня появятся кольца")
+
+    def test_page_with_target_hides_the_explanation(self):
+        DailyTarget.objects.create(
+            member=self.member,
+            calories=Decimal("2000"),
+            proteins=Decimal("120"),
+            fats=Decimal("70"),
+            carbs=Decimal("220"),
+        )
+
+        response = self.client.get(reverse("core:daily_target_edit"))
+
+        self.assertNotContains(response, "появятся кольца")
+
+    def test_page_shows_kcal_implied_by_macros(self):
+        DailyTarget.objects.create(
+            member=self.member,
+            calories=Decimal("2000"),
+            proteins=Decimal("120"),
+            fats=Decimal("70"),
+            carbs=Decimal("220"),
+        )
+
+        response = self.client.get(reverse("core:daily_target_edit"))
+
+        self.assertContains(response, "По БЖУ выходит ≈")
+        self.assertContains(response, "1990")
+        self.assertContains(response, "подставить")
+
+    def test_save_shows_toast_on_day_page(self):
+        response = self.client.post(
+            reverse("core:daily_target_edit"),
+            {"calories": "2000", "proteins": "120", "fats": "70", "carbs": "220"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Цель сохранена")
