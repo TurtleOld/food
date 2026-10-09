@@ -13,6 +13,13 @@
     {% empty %}
       <p class="muted">Ничего не найдено</p>
     {% endfor %}
+    {% if not query.isdigit %}
+      {% url 'core:entry_product_new' date.isoformat as new_url %}
+      <a class="result" href="{{ new_url }}?name={{ query|urlencode }}&meal={{ meal }}&hour={{ hour }}"
+         hx-get="{{ new_url }}?name={{ query|urlencode }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+        <span class="entry-name">+ Новый продукт «{{ query }}»</span>
+      </a>
+    {% endif %}
   {% else %}
     {% if recent %}<p class="muted is-size-7 mb-2">Недавние</p>{% endif %}
     {% for item in recent %}

@@ -1,0 +1,9 @@
+{% comment %}Шаг 1б шторки добавления записи: новый Продукт по пути. Страницы нет — только фрагмент.{% endcomment %}
+<form id="form" class="sheet-form" method="post" action="{% url 'core:entry_product_new' date.isoformat %}?{{ carried }}"
+      hx-post="{% url 'core:entry_product_new' date.isoformat %}?{{ carried }}" hx-target="#sheet-body" hx-swap="innerHTML">
+  {% csrf_token %}
+  <h2 class="title is-4 mb-3">Новый продукт</h2>
+  {{ form.non_field_errors }}
+  {% include "components/product_fields.html" %}
+  <button class="button is-primary is-fullwidth mt-5" type="submit">Создать и указать количество</button>
+</form>
