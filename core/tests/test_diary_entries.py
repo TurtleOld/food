@@ -223,7 +223,7 @@ class DayPageTotalsTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, ">165<")
+        self.assertContains(response, "165 <small")
         self.assertContains(response, "Б 31.0")
         self.assertContains(response, "Ж 3.6")
         self.assertContains(response, "У 0.0")

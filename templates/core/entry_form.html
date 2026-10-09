@@ -55,7 +55,7 @@
     {% endpartialdef %}
     <p><a href="{{ cancel_url }}">Отмена</a></p>
   {% else %}
-    <h1>Новая запись — {{ date|date:"d.m.Y" }}</h1>
+    <h1>Новая запись — {{ date|date:"d/m/Y" }}</h1>
     <form method="post">
       {% csrf_token %}
       {{ form.as_p }}

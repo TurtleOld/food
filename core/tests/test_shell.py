@@ -28,6 +28,19 @@ class ShellTest(TestCase):
 
         self.assertContains(response, 'aria-current="page"', count=2)  # top bar + tab bar
 
+    def test_every_diary_and_catalog_page_marks_its_section(self):
+        self.client.force_login(self.member)
+        pages = {
+            "diary": reverse("core:entry_create", args=["2026-01-05"]),
+            "diary ": reverse("core:day_on", args=["2026-01-05"]),
+            "products": reverse("core:product_create"),
+            "target": reverse("core:daily_target_edit"),
+        }
+        for section, url in pages.items():
+            with self.subTest(section=section):
+                response = self.client.get(url)
+                self.assertContains(response, 'aria-current="page"', count=2)
+
     def test_login_page_has_no_navigation(self):
         response = self.client.get(reverse("core:login"))
 

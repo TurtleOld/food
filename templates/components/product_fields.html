@@ -1,3 +1,4 @@
+{% load carry %}
 {% comment %}Общие поля Продукта: название, единица чипами и КБЖУ на 100 г / мл. Контекст: `form`.{% endcomment %}
 <div class="field">
   <label class="label" for="{{ form.name.id_for_label }}">Название</label>
@@ -12,7 +13,7 @@
     {% endfor %}
   </div>
   {% if off.found and not off.base_unit %}
-    <p class="help is-warning">Укажите, на сколько указано КБЖУ: на 100 г или 100 мл</p>
+    <p class="help is-warning">Укажите, на сколько указано КБЖУ: на 100 г или 100 мл{% if off.unit_hint %} (в Open Food Facts {% if off.unit_hint == "ml" %}объём указан в мл{% else %}вес указан в г{% endif %}){% endif %}</p>
   {% endif %}
   <p class="muted is-size-7 mt-1">граммы / миллилитры</p>
   {% for error in form.base_unit.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
@@ -40,13 +41,15 @@
   {% if bound_code %}
     <div id="barcodes" class="chips mb-2"><span class="chip num">▦ {{ bound_code }}</span></div>
     <input type="hidden" name="barcode" value="{{ bound_code }}">
-    <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
-       hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+    {% if date %}
+      <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?{% query_string bind=bound_code meal=meal hour=hour %}"
+         hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string bind=bound_code meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+    {% endif %}
   {% else %}
   <div x-data="scanner" @input="typed = $event.target.value.trim() !== ''">
     <div class="barcode-input is-flex" style="gap: .5rem">
       {{ form.barcode }}
-      <button class="button" type="button" aria-label="Сканер штрихкода" @click="typed ? $el.form.requestSubmit() : toggle()">
+      <button class="button" type="button" aria-label="Сканер штрихкода" @click="typed ? addCode() : toggle()">
         <span x-show="!typed">{% include "components/icons/scan.html" %}</span><span x-show="typed" x-cloak>добавить</span>
       </button>
     </div>

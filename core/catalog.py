@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from django.db.models import Q
+from django.contrib.auth import get_user_model
+from django.db.models import Q, QuerySet
 
 from core.barcodes import normalize_barcode
 from core.diary import search_products
@@ -16,6 +17,25 @@ from core.undo import CannotUndo, Member, Restored, make_token, restorer
 def entries_count(product: Product) -> int:
     """Число записей дневника, которые ссылаются на Продукт."""
     return product.diary_entries.count()
+
+
+def catalog_products(query: str = "") -> QuerySet[Product]:
+    """Продукты Каталога с кодами; при непустом `query` — только совпадения с ним."""
+    products = Product.objects.prefetch_related("barcodes")
+    if query:
+        products = products.filter(pk__in=[product.pk for product in search_catalog(query)])
+    return products
+
+
+def bind_barcode(code: str, product: Product) -> Barcode:
+    """Привязывает код к Продукту; код, уже занятый другим Продуктом, не отбирается."""
+    barcode, _ = Barcode.objects.get_or_create(code=code, defaults={"product": product})
+    return barcode
+
+
+def unbind_barcode(code: str) -> None:
+    """Отвязывает код от Продукта; если кода нет, ничего не делает."""
+    Barcode.objects.filter(code=code).delete()
 
 
 def deletion_token(product: Product, member: Member) -> str:
@@ -41,6 +61,8 @@ def deletion_token(product: Product, member: Member) -> str:
 def _restore_deleted_product(member: Member, payload: dict[str, Any]) -> Restored:
     # Тот же pk нужен, чтобы вернуть ссылки (например, открытые вкладки) на прежний адрес.
     if Product.objects.filter(pk=payload["pk"]).exists():
+        raise CannotUndo
+    if not get_user_model().objects.filter(pk=payload["author"]).exists():
         raise CannotUndo
     Product.objects.create(
         pk=payload["pk"],
@@ -76,7 +98,7 @@ def _restore_unbound_barcode(member: Member, payload: dict[str, Any]) -> Restore
     if not Product.objects.filter(pk=payload["product"]).exists():
         raise CannotUndo
     Barcode.objects.create(code=payload["code"], product_id=payload["product"])
-    return Restored()
+    return Restored(product_id=payload["product"])
 
 
 def search_catalog(query: str) -> list[Product]:

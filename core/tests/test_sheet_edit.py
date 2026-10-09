@@ -45,6 +45,16 @@ class SheetEditTests(TestCase):
         self.edit_url = reverse("core:entry_edit", args=[self.entry.pk])
         self.valid = {"date": self.today, "meal_type": "dinner", "amount": "200"}
 
+    def test_day_is_shown_and_accepted_as_dd_mm_yyyy(self):
+        response = self.client.get(self.edit_url, headers=HTMX)
+        self.assertContains(response, f'value="{self.today:%d/%m/%Y}"')
+
+        moved = self.today - datetime.timedelta(days=1)
+        self.client.post(self.edit_url, {**self.valid, "date": f"{moved:%d/%m/%Y}"}, headers=HTMX)
+
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.date, moved)
+
     def test_edit_page_without_htmx_is_a_full_page(self):
         response = self.client.get(self.edit_url)
 

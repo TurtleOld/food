@@ -85,6 +85,8 @@ class ServiceWorkerContentTest(TestCase):
             "vendor/alpine/alpine-3.17.4.min",
             "vendor/bulma/bulma-1.0.4.min",
             "css/app",
+            "js/sheet",
+            "js/scanner",
             "manifest",
             "icons/icon-192",
             "offline",
@@ -114,7 +116,7 @@ class ServiceWorkerContentTest(TestCase):
 
         self.assertTrue(urls)
         self.assertTrue(all(url.startswith("/static/") for url in urls))
-        self.assertFalse(any("barcode" in url or "wasm" in url for url in urls))
+        self.assertFalse(any("vendor/barcode-detector" in url or "wasm" in url for url in urls))
 
     def test_debug_flag_is_exposed_to_worker(self):
         with override_settings(DEBUG=True):
