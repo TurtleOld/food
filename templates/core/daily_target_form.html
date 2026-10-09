@@ -9,10 +9,10 @@
 
   <form method="post" class="box"
         x-data="{
-          k: '{{ form.calories.value|default_if_none:''|unlocalize }}',
-          p: '{{ form.proteins.value|default_if_none:''|unlocalize }}',
-          f: '{{ form.fats.value|default_if_none:''|unlocalize }}',
-          c: '{{ form.carbs.value|default_if_none:''|unlocalize }}',
+          k: '{{ form.calories.value|default_if_none:''|unlocalize|escapejs }}',
+          p: '{{ form.proteins.value|default_if_none:''|unlocalize|escapejs }}',
+          f: '{{ form.fats.value|default_if_none:''|unlocalize|escapejs }}',
+          c: '{{ form.carbs.value|default_if_none:''|unlocalize|escapejs }}',
           kcal() {
             const n = (v) => parseFloat(String(v).replace(',', '.'));
             const [p, f, c] = [n(this.p), n(this.f), n(this.c)];
