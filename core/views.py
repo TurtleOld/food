@@ -1,15 +1,21 @@
+from __future__ import annotations
+
 import datetime
-from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.staticfiles import finders
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
+from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
+from django.views import View
+from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
+from core.diary import day_summary
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
@@ -33,204 +39,212 @@ def _day_url(date: datetime.date) -> str:
     return reverse("core:day_on", args=[date.isoformat()])
 
 
-@login_required
-def day(request: HttpRequest, date: str | None = None) -> HttpResponse:
-    """Render the signed-in member's personal day page with meal totals."""
-    current_date = _parse_date(date) if date is not None else datetime.date.today()
+class DayView(LoginRequiredMixin, TemplateView):
+    """Личная страница дня участника с итогами по Приёмам пищи."""
 
-    entries = DiaryEntry.objects.filter(
-        member_id=request.user.pk, date=current_date
-    ).select_related("product")
-    meals = []
-    for meal_type, meal_label in DiaryEntry.MealType.choices:
-        meal_entries = [entry for entry in entries if entry.meal_type == meal_type]
-        if not meal_entries:
-            continue
-        meals.append(
-            {
-                "type": meal_type,
-                "label": meal_label,
-                "entries": meal_entries,
-                "calories": sum((entry.calories for entry in meal_entries), Decimal(0)),
-                "proteins": sum((entry.proteins for entry in meal_entries), Decimal(0)),
-                "fats": sum((entry.fats for entry in meal_entries), Decimal(0)),
-                "carbs": sum((entry.carbs for entry in meal_entries), Decimal(0)),
-            }
+    template_name = "core/day.html"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        date = self.kwargs.get("date")
+        current_date = _parse_date(date) if date is not None else datetime.date.today()
+        summary = day_summary(self.request.user, current_date)
+        context.update(
+            current_date=current_date,
+            previous_date=current_date - datetime.timedelta(days=1),
+            next_date=current_date + datetime.timedelta(days=1),
+            meals=summary.meals,
+            totals=summary.totals,
+            progress=summary.progress,
         )
-
-    totals = {
-        "calories": sum((entry.calories for entry in entries), Decimal(0)),
-        "proteins": sum((entry.proteins for entry in entries), Decimal(0)),
-        "fats": sum((entry.fats for entry in entries), Decimal(0)),
-        "carbs": sum((entry.carbs for entry in entries), Decimal(0)),
-    }
-
-    target = DailyTarget.objects.filter(member_id=request.user.pk).first()
-    progress = None
-    if target is not None:
-        progress = {
-            "target": target,
-            "calories": totals["calories"] - target.calories,
-            "proteins": totals["proteins"] - target.proteins,
-            "fats": totals["fats"] - target.fats,
-            "carbs": totals["carbs"] - target.carbs,
-        }
-
-    context = {
-        "current_date": current_date,
-        "previous_date": current_date - datetime.timedelta(days=1),
-        "next_date": current_date + datetime.timedelta(days=1),
-        "meals": meals,
-        "totals": totals,
-        "progress": progress,
-    }
-    return render(request, "core/day.html", context)
+        return context
 
 
-@login_required
-def entry_create(request: HttpRequest, date: str) -> HttpResponse:
-    """Create a diary entry for the signed-in member on the given day."""
-    entry_date = _parse_date(date)
+class OwnEntryMixin(LoginRequiredMixin):
+    """Ограничивает записи дневника записями текущего участника."""
 
-    if request.method == "POST":
-        form = DiaryEntryForm(request.POST)
-        if form.is_valid():
-            entry = form.save(commit=False)
-            entry.member = request.user
-            entry.date = entry_date
-            entry.save()
-            messages.success(request, "Запись добавлена")
-            return redirect("core:day_on", date=entry_date.isoformat())
-    else:
-        form = DiaryEntryForm()
+    request: HttpRequest
+    model = DiaryEntry
 
-    context = {"form": form, "date": entry_date, "cancel_url": _day_url(entry_date)}
-    return render(request, "core/entry_form.html", context)
+    def get_queryset(self) -> QuerySet[DiaryEntry]:
+        return DiaryEntry.objects.filter(member_id=self.request.user.pk)
 
 
-@login_required
-def entry_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    """Edit a diary entry belonging to the signed-in member."""
-    entry = get_object_or_404(DiaryEntry, pk=pk, member_id=request.user.pk)
-    if request.method == "POST":
-        form = DiaryEntryEditForm(request.POST, instance=entry)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Запись обновлена")
-            return redirect("core:day_on", date=form.instance.date.isoformat())
-    else:
-        form = DiaryEntryEditForm(instance=entry)
+class EntryCreateView(LoginRequiredMixin, CreateView):
+    """Создаёт запись дневника текущего участника на заданный день."""
 
-    context = {"form": form, "entry": entry, "cancel_url": _day_url(entry.date)}
-    return render(request, "core/entry_form.html", context)
+    form_class = DiaryEntryForm
+    template_name = "core/entry_form.html"
 
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        super().setup(request, *args, **kwargs)
+        self.entry_date = _parse_date(kwargs["date"])
 
-@login_required
-def entry_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete a diary entry belonging to the signed-in member."""
-    entry = get_object_or_404(DiaryEntry, pk=pk, member_id=request.user.pk)
-    if request.method == "POST":
-        entry_date = entry.date
-        entry.delete()
-        messages.success(request, "Запись удалена")
-        return redirect("core:day_on", date=entry_date.isoformat())
-    context = {"entry": entry, "cancel_url": _day_url(entry.date)}
-    return render(request, "core/entry_confirm_delete.html", context)
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        form.instance.member = self.request.user
+        form.instance.date = self.entry_date
+        messages.success(self.request, "Запись добавлена")
+        return super().form_valid(form)
+
+    def get_success_url(self) -> str:
+        return _day_url(self.entry_date)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(date=self.entry_date, cancel_url=_day_url(self.entry_date))
+        return context
 
 
-@login_required
-def daily_target_edit(request: HttpRequest) -> HttpResponse:
-    """Edit the signed-in member's own daily КБЖУ target."""
-    target = DailyTarget.objects.filter(member_id=request.user.pk).first()
-    if request.method == "POST":
-        form = DailyTargetForm(request.POST, instance=target)
-        if form.is_valid():
-            daily_target = form.save(commit=False)
-            daily_target.member = request.user
-            daily_target.save()
-            messages.success(request, "Цель сохранена")
-            return redirect("core:day")
-    else:
-        form = DailyTargetForm(instance=target)
+class EntryUpdateView(OwnEntryMixin, UpdateView):
+    """Редактирует запись дневника текущего участника."""
 
-    context = {"form": form, "cancel_url": _day_url(datetime.date.today())}
-    return render(request, "core/daily_target_form.html", context)
+    form_class = DiaryEntryEditForm
+    template_name = "core/entry_form.html"
+    context_object_name = "entry"
 
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        messages.success(self.request, "Запись обновлена")
+        return super().form_valid(form)
 
-def healthz(request: HttpRequest) -> HttpResponse:
-    """Report that the application process is up."""
-    return HttpResponse("ok")
+    def get_success_url(self) -> str:
+        return _day_url(self.object.date)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["cancel_url"] = _day_url(self.object.date)
+        return context
 
 
-def service_worker(request: HttpRequest) -> HttpResponse:
-    """Serve the service worker from the origin root so its scope covers the whole app."""
-    script_path = finders.find("js/service-worker.js")
-    if script_path is None:
-        raise Http404("Service worker не найден")
-    with open(script_path, "rb") as script:
-        response = HttpResponse(script.read(), content_type="application/javascript")
-    response["Service-Worker-Allowed"] = "/"
-    if not settings.DEBUG:
-        response["Cache-Control"] = "no-cache"
-    return response
+class EntryDeleteView(OwnEntryMixin, DeleteView):
+    """Удаляет запись дневника текущего участника после подтверждения."""
+
+    template_name = "core/entry_confirm_delete.html"
+    context_object_name = "entry"
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        messages.success(self.request, "Запись удалена")
+        return super().form_valid(form)
+
+    def get_success_url(self) -> str:
+        return _day_url(self.object.date)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["cancel_url"] = _day_url(self.object.date)
+        return context
 
 
-@login_required
-def product_list(request: HttpRequest) -> HttpResponse:
-    """Render the shared product catalog, optionally filtered by name."""
-    query = request.GET.get("q", "").strip()
-    all_products = Product.objects.select_related("author")
-    products: list[Product] = list(all_products)
-    if query:
+class DailyTargetUpdateView(LoginRequiredMixin, UpdateView):
+    """Редактирует собственную Суточную цель участника, создавая её при первом сохранении."""
+
+    form_class = DailyTargetForm
+    template_name = "core/daily_target_form.html"
+    success_url = reverse_lazy("core:day")
+
+    def get_object(self, queryset: QuerySet[DailyTarget] | None = None) -> DailyTarget | None:
+        return DailyTarget.objects.filter(member_id=self.request.user.pk).first()
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        form.instance.member = self.request.user
+        messages.success(self.request, "Цель сохранена")
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["cancel_url"] = _day_url(datetime.date.today())
+        return context
+
+
+class HealthzView(View):
+    """Сообщает, что процесс приложения жив."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return HttpResponse("ok")
+
+
+class ServiceWorkerView(View):
+    """Отдаёт service worker с корня origin, чтобы его scope покрывал всё приложение."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        script_path = finders.find("js/service-worker.js")
+        if script_path is None:
+            raise Http404("Service worker не найден")
+        with open(script_path, "rb") as script:
+            response = HttpResponse(script.read(), content_type="application/javascript")
+        response["Service-Worker-Allowed"] = "/"
+        if not settings.DEBUG:
+            response["Cache-Control"] = "no-cache"
+        return response
+
+
+class ProductListView(LoginRequiredMixin, ListView):
+    """Общий Каталог продуктов с фильтром по названию."""
+
+    template_name = "core/product_list.html"
+    context_object_name = "products"
+
+    def get_queryset(self) -> QuerySet[Product]:
+        products = Product.objects.select_related("author")
+        query = self.query()
+        if not query:
+            return products
         needle = query.lower()
-        products = [product for product in products if needle in product.name.lower()]
-    return render(request, "core/product_list.html", {"products": products, "query": query})
+        # SQLite lower()/icontains не сворачивают регистр кириллицы, поэтому фильтруем в Python.
+        matching_ids = [product.pk for product in products if needle in product.name.lower()]
+        return products.filter(pk__in=matching_ids)
+
+    def query(self) -> str:
+        return self.request.GET.get("q", "").strip()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["query"] = self.query()
+        return context
 
 
-@login_required
-def product_create(request: HttpRequest) -> HttpResponse:
-    """Create a new catalog product authored by the signed-in member."""
-    if request.method == "POST":
-        form = ProductCreateForm(request.POST)
-        if form.is_valid():
-            product = form.save(commit=False)
-            product.author = request.user
-            product.save()
-            messages.success(request, "Продукт создан")
-            return redirect("core:product_list")
-    else:
-        form = ProductCreateForm()
-    return render(request, "core/product_form.html", {"form": form})
+class ProductCreateView(LoginRequiredMixin, CreateView):
+    """Создаёт продукт Каталога с автором из текущего участника."""
+
+    form_class = ProductCreateForm
+    template_name = "core/product_form.html"
+    success_url = reverse_lazy("core:product_list")
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        form.instance.author = self.request.user
+        messages.success(self.request, "Продукт создан")
+        return super().form_valid(form)
 
 
-@login_required
-def product_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    """Edit any catalog product; the base unit stays fixed."""
-    product = get_object_or_404(Product, pk=pk)
-    if request.method == "POST":
-        form = ProductEditForm(request.POST, instance=product)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Продукт обновлён")
-            return redirect("core:product_list")
-    else:
-        form = ProductEditForm(instance=product)
-    return render(request, "core/product_form.html", {"form": form, "product": product})
+class ProductUpdateView(LoginRequiredMixin, UpdateView):
+    """Редактирует любой продукт Каталога; базовая единица остаётся прежней."""
+
+    model = Product
+    form_class = ProductEditForm
+    template_name = "core/product_form.html"
+    context_object_name = "product"
+    success_url = reverse_lazy("core:product_list")
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        messages.success(self.request, "Продукт обновлён")
+        return super().form_valid(form)
 
 
-@login_required
-def product_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete a catalog product, unless a diary entry still references it."""
-    product = get_object_or_404(Product, pk=pk)
-    if request.method == "POST":
+class ProductDeleteView(LoginRequiredMixin, DeleteView):
+    """Удаляет продукт Каталога, если на него не ссылаются записи дневника."""
+
+    model = Product
+    template_name = "core/product_confirm_delete.html"
+    context_object_name = "product"
+    success_url = reverse_lazy("core:product_list")
+
+    def form_valid(self, form: Form) -> HttpResponse:
         try:
-            product.delete()
+            response = super().form_valid(form)
         except ProtectedError:
             messages.error(
-                request,
+                self.request,
                 "Продукт нельзя удалить: на него ссылаются записи дневника",
             )
-        else:
-            messages.success(request, "Продукт удалён")
-        return redirect("core:product_list")
-    return render(request, "core/product_confirm_delete.html", {"product": product})
+            return redirect(self.success_url)
+        messages.success(self.request, "Продукт удалён")
+        return response
