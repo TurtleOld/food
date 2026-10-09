@@ -20,6 +20,16 @@ urlpatterns = [
         views.EntryProductCreateView.as_view(),
         name="entry_product_new",
     ),
+    path(
+        "day/<str:date>/entries/barcode-bind/",
+        views.EntryBarcodeBindView.as_view(),
+        name="entry_barcode_bind",
+    ),
+    path(
+        "day/<str:date>/entries/barcode-unbind/",
+        views.EntryBarcodeUnbindView.as_view(),
+        name="entry_barcode_unbind",
+    ),
     path("entries/<int:pk>/edit/", views.EntryUpdateView.as_view(), name="entry_edit"),
     path("entries/<int:pk>/preview/", views.EntryPreviewView.as_view(), name="entry_preview"),
     path("entries/<int:pk>/delete/", views.EntryDeleteView.as_view(), name="entry_delete"),
