@@ -1,0 +1,27 @@
+{% comment %}Общие поля Продукта: название, единица чипами и КБЖУ на 100 г / мл. Контекст: `form`.{% endcomment %}
+<div class="field">
+  <label class="label" for="{{ form.name.id_for_label }}">Название</label>
+  {{ form.name }}
+  {% for error in form.name.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+</div>
+
+{% if form.base_unit %}
+  <div class="chips" role="radiogroup" aria-label="Единица">
+    {% for radio in form.base_unit %}
+      {% if radio.data.value != "" %}<label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endif %}
+    {% endfor %}
+  </div>
+  <p class="muted is-size-7 mt-1">граммы / миллилитры</p>
+  {% for error in form.base_unit.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+{% endif %}
+
+<p class="muted is-size-7 mt-4 mb-2">На 100 г / мл</p>
+<div class="nutrition-fields">
+  {% for field, dot, label in form.nutrition_rows %}
+    <div class="field">
+      <label class="label macro" style="--dot: var(--{{ dot }})" for="{{ field.id_for_label }}">{{ label }}</label>
+      {{ field }}
+      {% for error in field.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+    </div>
+  {% endfor %}
+</div>
