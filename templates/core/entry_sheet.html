@@ -14,11 +14,19 @@
         </a>
       {% else %}
         {% url 'core:entry_product_new' date.isoformat as new_url %}
-        <a class="result" href="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
-           hx-get="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
-          <span class="entry-name">+ Новый продукт со штрихкодом</span>
-          <span class="entry-detail is-size-7 muted">в каталоге нет — заполните по упаковке</span>
-        </a>
+        {% if code_search.off.found %}
+          <a class="result" href="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
+             hx-get="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+            <span class="entry-name">{{ code_search.off.name|default:"Без названия" }}</span>
+            <span class="entry-detail is-size-7 muted">Open Food Facts · {% if code_search.off.is_complete %}проверить и добавить{% else %}не все КБЖУ — дополнить{% endif %}</span>
+          </a>
+        {% else %}
+          <a class="result" href="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
+             hx-get="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+            <span class="entry-name">+ Новый продукт со штрихкодом</span>
+            <span class="entry-detail is-size-7 muted">{% if code_search.off.failed %}Open Food Facts не ответил — заполните вручную{% else %}в каталоге нет и в Open Food Facts — заполните по упаковке{% endif %}</span>
+          </a>
+        {% endif %}
         <a class="result" href="{% url 'core:entry_create' date.isoformat %}?bind={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="muted">Уже есть в каталоге? Привязать код к продукту</span>
@@ -80,13 +88,16 @@
   <input class="input" type="search" name="q" autocomplete="off" autofocus
          placeholder="Название или цифры штрихкода" aria-label="Поиск продукта"
          hx-get="{% url 'core:entry_search' date.isoformat %}" hx-trigger="input changed delay:250ms, search"
-         hx-target="#search-results" hx-swap="outerHTML" hx-include="this" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}", "bind": "{{ bind }}"}'
+         hx-target="#search-results" hx-swap="outerHTML" hx-include="this"
+         hx-on::before-request="const wait = document.getElementById('search-wait'); const digits = this.value.replace(/\s/g, ''); wait.hidden = !/^\d{6,}$/.test(digits); document.getElementById('search-wait-query').textContent = digits"
+         hx-on::after-request="document.getElementById('search-wait').hidden = true" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}", "bind": "{{ bind }}"}'
          @keydown.enter.prevent="$root.querySelector('.result')?.click()">
   {% if not bind %}
     <button type="button" class="btn-quiet scan-toggle" aria-label="Сканер штрихкода" :aria-pressed="cam !== 'off'" @click="toggle()">{% include "components/icons/scan.html" %}</button>
   {% endif %}
   </div>
   {% if not bind %}{% include "components/scanner_strip.html" with field="input[name=q]" where="в поиск" %}{% endif %}
+  <p id="search-wait" class="muted is-size-7 mt-2" hidden>⏳ Ищем <span id="search-wait-query"></span> в каталоге и Open Food Facts</p>
   <div class="mt-4">
     {% include "core/entry_sheet.html#results" with query="" products=None meal=request.GET.meal hour=request.GET.hour bind=bind %}
   </div>

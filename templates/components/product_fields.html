@@ -11,6 +11,9 @@
       {% if radio.data.value != "" %}<label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endif %}
     {% endfor %}
   </div>
+  {% if off.found and not off.base_unit %}
+    <p class="help is-warning">Укажите, на сколько указано КБЖУ: на 100 г или 100 мл</p>
+  {% endif %}
   <p class="muted is-size-7 mt-1">граммы / миллилитры</p>
   {% for error in form.base_unit.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
 {% elif product %}
@@ -23,6 +26,9 @@
     <div class="field">
       <label class="label macro" style="--dot: var(--{{ dot }})" for="{{ field.id_for_label }}">{{ label }}</label>
       {{ field }}
+      {% if off.found and field.name in off.missing and not field.value %}
+        <p class="help is-warning">нет в Open Food Facts — посмотрите на упаковке</p>
+      {% endif %}
       {% for error in field.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
     </div>
   {% endfor %}
