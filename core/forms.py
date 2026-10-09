@@ -70,6 +70,25 @@ class ProductFieldsForm(forms.ModelForm):
                 Barcode.objects.update_or_create(code=code, defaults={"product": product})
         return product
 
+    def draft_for_barcode_step(self) -> "ProductFieldsForm":
+        """Форма с введёнными значениями без ошибок валидации, кроме ошибок поля штрихкода.
+
+        Шаг «добавить код» не сохраняет Продукт, поэтому остальные поля не должны ругаться
+        на незаполненность. Вызывается на связанной форме после `full_clean()`.
+        """
+        initial = {
+            name: self.data[name]
+            for name in self.fields
+            if name in self.data and name not in ("barcode", "transfer")
+        }
+        draft = type(self)(initial=initial, instance=self.instance)
+        draft.full_clean()
+        draft.cleaned_data = {}
+        for error in self.errors.get("barcode", []):
+            draft.add_error("barcode", error)
+        draft.barcode_owner = self.barcode_owner
+        return draft
+
     @property
     def nutrition_rows(self) -> list[tuple[Any, str, str]]:
         """Поля КБЖУ с цветом точки и подписью в порядке показа."""

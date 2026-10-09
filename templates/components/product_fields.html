@@ -40,13 +40,15 @@
   {% if bound_code %}
     <div id="barcodes" class="chips mb-2"><span class="chip num">▦ {{ bound_code }}</span></div>
     <input type="hidden" name="barcode" value="{{ bound_code }}">
-    <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
-       hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+    {% if date %}
+      <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
+         hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+    {% endif %}
   {% else %}
   <div x-data="scanner" @input="typed = $event.target.value.trim() !== ''">
     <div class="barcode-input is-flex" style="gap: .5rem">
       {{ form.barcode }}
-      <button class="button" type="button" aria-label="Сканер штрихкода" @click="typed ? $el.form.requestSubmit() : toggle()">
+      <button class="button" type="button" aria-label="Сканер штрихкода" @click="typed ? addCode() : toggle()">
         <span x-show="!typed">{% include "components/icons/scan.html" %}</span><span x-show="typed" x-cloak>добавить</span>
       </button>
     </div>

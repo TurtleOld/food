@@ -19,6 +19,17 @@ def entries_count(product: Product) -> int:
     return product.diary_entries.count()
 
 
+def bind_barcode(code: str, product: Product) -> Barcode:
+    """Привязывает код к Продукту; код, уже занятый другим Продуктом, не отбирается."""
+    barcode, _ = Barcode.objects.get_or_create(code=code, defaults={"product": product})
+    return barcode
+
+
+def unbind_barcode(code: str) -> None:
+    """Отвязывает код от Продукта; если кода нет, ничего не делает."""
+    Barcode.objects.filter(code=code).delete()
+
+
 def deletion_token(product: Product, member: Member) -> str:
     """Токен «Вернуть» для удаляемого Продукта: хранит все поля, включая прежний pk."""
     return make_token(

@@ -104,6 +104,47 @@ class BarcodeSheetTests(BarcodeBase):
         self.assertContains(response, "Цифры штрихкода")
 
 
+class BarcodeAddButtonTests(BarcodeBase):
+    def add(self, url, code, **extra):
+        return self.client.post(
+            url, {**VALID, "barcode": code, "add_barcode": "1", **extra}, headers=HTMX
+        )
+
+    def test_adding_to_an_existing_product_binds_only_the_code_and_keeps_the_sheet_open(self):
+        response = self.add(self.edit_url(self.chicken), EAN13, name="Курица гриль")
+
+        self.assertEqual(self.codes(self.chicken), [EAN13])
+        self.chicken.refresh_from_db()
+        self.assertEqual(self.chicken.name, "Курица")
+        self.assertNotIn("HX-Trigger", response.headers)
+        self.assertContains(response, f"▦ {EAN13}")
+        self.assertContains(response, 'value="Курица гриль"')
+        self.assertNotContains(response, "Продукт обновлён")
+
+    def test_an_invalid_code_is_reported_and_nothing_is_bound(self):
+        response = self.add(self.edit_url(self.chicken), "4006381333932")
+
+        self.assertContains(response, "Неверный штрихкод")
+        self.assertEqual(self.codes(self.chicken), [])
+
+    def test_a_code_of_another_product_is_reported_with_transfer(self):
+        Barcode.objects.create(code=EAN13, product=self.buckwheat)
+
+        response = self.add(self.edit_url(self.chicken), EAN13)
+
+        self.assertContains(response, "Код уже у «Гречка варёная»")
+        self.assertContains(response, "Перенести сюда")
+        self.assertEqual(self.codes(self.chicken), [])
+
+    def test_on_a_new_product_the_code_is_kept_as_a_chip_without_creating_it(self):
+        response = self.add(self.create_url, EAN13)
+
+        self.assertFalse(Product.objects.filter(name="Овсянка").exists())
+        self.assertNotIn("HX-Trigger", response.headers)
+        self.assertContains(response, f"▦ {EAN13}")
+        self.assertContains(response, f'name="barcode" value="{EAN13}"')
+
+
 class BarcodeUnbindTests(BarcodeBase):
     def unbind_url(self, barcode):
         return reverse("core:barcode_unbind", args=[barcode.pk])

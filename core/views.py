@@ -30,8 +30,8 @@ from django.views.generic import (
 from django_htmx.http import trigger_client_event
 
 from core.barcodes import normalize_barcode
+from core.catalog import bind_barcode, entries_count, search_by_code, search_catalog
 from core.catalog import deletion_token as product_deletion_token
-from core.catalog import entries_count, search_by_code, search_catalog
 from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
     addition_token,
@@ -129,6 +129,32 @@ class OwnEntryMixin(HtmxLoginRequiredMixin):
 
     def get_queryset(self) -> QuerySet[DiaryEntry]:
         return DiaryEntry.objects.filter(member_id=self.request.user.pk)
+
+
+class BarcodeAddMixin:
+    """Кнопка «добавить» у Цифр штрихкода: привязывает только код, остальные правки не сохраняет.
+
+    У существующего Продукта код привязывается сразу; у нового запоминается чипом до создания.
+    Шторка остаётся открытой, введённые значения формы сохраняются.
+    """
+
+    request: HttpRequest
+    kwargs: dict[str, Any]
+    object: Any
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if "add_barcode" not in request.POST:
+            return super().post(request, *args, **kwargs)  # type: ignore[misc]
+        self.object = self.get_object() if "pk" in self.kwargs else None  # type: ignore[attr-defined]
+        form = self.get_form()  # type: ignore[attr-defined]
+        form.full_clean()
+        code = None if "barcode" in form.errors else form.cleaned_data.get("barcode")
+        if code and self.object:
+            bind_barcode(code, self.object)
+        context = self.get_context_data(form=form.draft_for_barcode_step())  # type: ignore[attr-defined]
+        if code and not self.object:
+            context["bound_code"] = code
+        return self.render_to_response(context)  # type: ignore[attr-defined]
 
 
 class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
@@ -261,7 +287,7 @@ class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
         return context
 
 
-class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
+class EntryProductCreateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CreateView):
     """Шаг 1б шторки: новый Продукт по пути, после создания — шаг количества."""
 
     form_class = ProductCreateForm
@@ -636,7 +662,7 @@ class CatalogSheetMixin:
         )
 
 
-class ProductCreateView(HtmxLoginRequiredMixin, CatalogSheetMixin, CreateView):
+class ProductCreateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CatalogSheetMixin, CreateView):
     """Создаёт продукт Каталога с автором из текущего участника."""
 
     form_class = ProductCreateForm
@@ -655,7 +681,7 @@ class ProductCreateView(HtmxLoginRequiredMixin, CatalogSheetMixin, CreateView):
         return super().form_valid(form)
 
 
-class ProductUpdateView(HtmxLoginRequiredMixin, CatalogSheetMixin, UpdateView):
+class ProductUpdateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CatalogSheetMixin, UpdateView):
     """Редактирует любой продукт Каталога; базовая единица остаётся прежней."""
 
     model = Product
