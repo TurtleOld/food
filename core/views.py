@@ -27,8 +27,9 @@ from django.views.generic import (
 )
 from django_htmx.http import trigger_client_event
 
+from core.barcodes import normalize_barcode
 from core.catalog import deletion_token as product_deletion_token
-from core.catalog import entries_count, search_catalog
+from core.catalog import entries_count, search_by_code, search_catalog
 from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
     addition_token,
@@ -192,6 +193,8 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context.update(date=self.entry_date, cancel_url=_day_url(self.entry_date))
         if self.in_sheet:
+            context["bind"] = normalize_barcode(self.request.GET.get("bind", "")) or ""
+            context["code"] = normalize_barcode(self.request.GET.get("code", "")) or ""
             form = context["form"]
             product = Product.objects.filter(pk=_pk(form["product"].value())).first()
             context.update(
@@ -239,9 +242,16 @@ class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
             meal=self.request.GET.get("meal", ""),
             hour=self.request.GET.get("hour", ""),
             query=query,
+            bind=normalize_barcode(self.request.GET.get("bind", "")) or "",
         )
-        if query:
-            context["products"] = search_products(query)
+        code_search = None if context["bind"] else search_by_code(query)
+        if code_search:
+            context["code_search"] = code_search
+            context["products"] = code_search.products
+        elif query:
+            context["products"] = (
+                search_catalog(query) if context["bind"] else search_products(query)
+            )
         else:
             context["recent"] = recent_products(self.request.user)
         return context
@@ -257,11 +267,17 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
         super().setup(request, *args, **kwargs)
         self.entry_date = _parse_date(kwargs["date"])
 
+    def _code(self) -> str:
+        return normalize_barcode(self.request.GET.get("code", "")) or ""
+
     def get_initial(self) -> dict[str, Any]:
-        return {"name": self.request.GET.get("name", "").strip()}
+        return {"name": self.request.GET.get("name", "").strip(), "barcode": self._code()}
 
     def _carried(self) -> dict[str, str]:
-        return {key: self.request.GET.get(key, "") for key in ("meal", "hour")}
+        carried = {key: self.request.GET.get(key, "") for key in ("meal", "hour")}
+        if code := self._code():
+            carried["code"] = code
+        return carried
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         form.instance.author = self.request.user
@@ -269,13 +285,56 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
 
     def get_success_url(self) -> str:
         product: Product = self.object  # type: ignore[assignment]
-        query = urlencode({"product": product.pk, **self._carried()})
+        carried = {key: value for key, value in self._carried().items() if key != "code"}
+        query = urlencode({"product": product.pk, **carried})
         return f"{reverse('core:entry_create', args=[self.entry_date.isoformat()])}?{query}"
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context.update(date=self.entry_date, carried=urlencode(self._carried()))
+        context.update(
+            date=self.entry_date,
+            carried=urlencode(self._carried()),
+            bound_code=self._code(),
+            meal_hour=urlencode({k: v for k, v in self._carried().items() if k != "code"}),
+        )
         return context
+
+
+class EntryBarcodeBindView(HtmxLoginRequiredMixin, View):
+    """Привязывает код к выбранному в шторке Продукту и ведёт на шаг количества."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, date: str) -> HttpResponse:
+        code = normalize_barcode(request.POST.get("code", ""))
+        if code is None:
+            raise Http404("Неверный штрихкод")
+        product = get_object_or_404(Product, pk=_pk(request.POST.get("product")))
+        # Чужой код не отбираем: перенос — отдельное явное действие в форме Продукта.
+        barcode, _ = Barcode.objects.get_or_create(code=code, defaults={"product": product})
+        query = urlencode({"product": barcode.product_id, **_carried_meal(request.POST)})
+        url = reverse("core:entry_create", args=[_parse_date(date).isoformat()])
+        return redirect(f"{url}?{query}")
+
+
+class EntryBarcodeUnbindView(HtmxLoginRequiredMixin, View):
+    """«Не тот продукт?»: отвязывает код и возвращает к форме нового Продукта с этим кодом."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest, date: str) -> HttpResponse:
+        code = normalize_barcode(request.POST.get("code", ""))
+        if code is None:
+            raise Http404("Неверный штрихкод")
+        Barcode.objects.filter(code=code).delete()
+        query = urlencode({"code": code, **_carried_meal(request.POST)})
+        url = reverse("core:entry_product_new", args=[_parse_date(date).isoformat()])
+        return redirect(f"{url}?{query}")
+
+
+def _carried_meal(data: Any) -> dict[str, str]:
+    """Приём пищи и час, которые шторка переносит между шагами."""
+    return {key: data.get(key, "") for key in ("meal", "hour")}
 
 
 class EntryDraftPreviewView(HtmxLoginRequiredMixin, TemplateView):
