@@ -6,16 +6,7 @@ from django.db import transaction
 
 from core.barcodes import normalize_barcode
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
-
-NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
-
-
-NUTRITION_ROWS = [
-    ("calories", "kcal", "ккал"),
-    ("proteins", "p", "Б"),
-    ("fats", "f", "Ж"),
-    ("carbs", "c", "У"),
-]
+from core.nutrition import NUTRITION_FIELDS, NUTRITION_ROWS
 
 
 class ProductFieldsForm(forms.ModelForm):

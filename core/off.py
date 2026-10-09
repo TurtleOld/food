@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 from django.core.cache import cache
 
+from core.nutrition import NUTRITION_FIELDS
+
 API_URL = "https://world.openfoodfacts.org/api/v3/product/"
 PRODUCT_URL = "https://world.openfoodfacts.org/product/"
 FIELDS = "product_name,brands,nutriments,nutrition_data_per,product_quantity_unit"
@@ -60,13 +62,7 @@ class OffLookup:
     @property
     def missing(self) -> list[str]:
         """Имена полей КБЖУ, которых нет в данных OFF."""
-        values = {
-            "calories": self.calories,
-            "proteins": self.proteins,
-            "fats": self.fats,
-            "carbs": self.carbs,
-        }
-        return [name for name, value in values.items() if value is None]
+        return [name for name in NUTRITION_FIELDS if getattr(self, name) is None]
 
     @property
     def is_complete(self) -> bool:

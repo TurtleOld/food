@@ -10,6 +10,7 @@ from django.contrib.auth.models import AnonymousUser
 
 from core.forms import DiaryEntrySheetForm
 from core.models import DailyTarget, DiaryEntry, Product
+from core.nutrition import NUTRITION_ROWS
 from core.undo import CannotUndo, Member, Restored, make_token, restorer
 
 
@@ -145,18 +146,14 @@ def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
     if progress is None:
         return []
     target = progress["target"]
-    specs = (
-        ("Ккал", "calories"),
-        ("Б", "proteins"),
-        ("Ж", "fats"),
-        ("У", "carbs"),
-    )
     result: list[Ring] = []
-    for label, key in specs:
+    for key, _dot, label in NUTRITION_ROWS:
         value: Decimal = totals[key]  # type: ignore[literal-required]
         goal: Decimal = getattr(target, key)
         pct = min(100, int(value / goal * 100)) if goal else 0
-        result.append(Ring(label=label, value=value, goal=goal, pct=pct, over=value > goal))
+        result.append(
+            Ring(label=label.capitalize(), value=value, goal=goal, pct=pct, over=value > goal)
+        )
     return result
 
 

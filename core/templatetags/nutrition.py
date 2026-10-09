@@ -7,19 +7,19 @@ register = template.Library()
 
 @register.filter
 def whole(value: Decimal) -> str:
-    """Round a nutrition value to a locale-independent integer string."""
+    """Округляет значение КБЖУ до целого и выводит строкой без учёта локали."""
     return str(int(value.to_integral_value(rounding=ROUND_HALF_UP)))
 
 
 @register.filter
 def one_decimal(value: Decimal) -> str:
-    """Format a nutrition value with exactly one, locale-independent decimal place."""
+    """Выводит значение КБЖУ с одним знаком после запятой без учёта локали."""
     return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
 
 
 @register.filter
 def sub(value: Decimal, other: Decimal) -> Decimal:
-    """Subtract `other` from `value`."""
+    """Вычитает `other` из `value`."""
     return value - other
 
 

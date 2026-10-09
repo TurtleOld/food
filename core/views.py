@@ -80,7 +80,7 @@ DEFAULT_AMOUNT = 100
 
 
 def _parse_date(value: str) -> datetime.date:
-    """Parse a URL date segment, raising Http404 on a malformed value."""
+    """Разбирает дату из сегмента URL; неверная дата даёт Http404."""
     try:
         return datetime.date.fromisoformat(value)
     except ValueError:
@@ -96,7 +96,7 @@ def _pk(value: Any) -> int:
 
 
 def _day_url(date: datetime.date) -> str:
-    """Build the URL of the day page for the given date."""
+    """Собирает URL страницы дня для даты `date`."""
     return reverse("core:day_on", args=[date.isoformat()])
 
 
