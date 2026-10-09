@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 from typing import Any
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.staticfiles import finders
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
+from django.templatetags.static import static
 from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
@@ -169,18 +171,46 @@ class HealthzView(View):
         return HttpResponse("ok")
 
 
+PRECACHE_STATIC_FILES = (
+    "vendor/htmx/htmx-2.0.11.min.js",
+    "vendor/alpine/alpine-3.17.4.min.js",
+    "vendor/bulma/bulma-1.0.4.min.css",
+    "css/app.css",
+    "manifest.webmanifest",
+    "icons/icon-192.png",
+    "icons/icon-512.png",
+    "icons/icon-maskable-512.png",
+    "icons/apple-touch-icon.png",
+    "icons/favicon.svg",
+    "offline.html",
+)
+
+
 class ServiceWorkerView(View):
-    """Отдаёт service worker с корня origin, чтобы его scope покрывал всё приложение."""
+    """Отдаёт service worker с корня origin, чтобы его scope покрывал всё приложение.
+
+    Скрипт рендерится шаблоном: список precache состоит из хэшированных URL
+    статики, а имя кэша выводится из него, поэтому новая статика даёт новые
+    байты воркера и браузер ставит свежую версию.
+    """
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        script_path = finders.find("js/service-worker.js")
-        if script_path is None:
-            raise Http404("Service worker не найден")
-        with open(script_path, "rb") as script:
-            response = HttpResponse(script.read(), content_type="application/javascript")
+        precache_urls = [static(name) for name in PRECACHE_STATIC_FILES]
+        cache_hash = hashlib.sha256("\n".join(precache_urls).encode()).hexdigest()[:12]
+        response = render(
+            request,
+            "service-worker.js",
+            {
+                "precache_json": json.dumps(precache_urls),
+                "cache_name": f"food-static-{cache_hash}",
+                "offline_url": static("offline.html"),
+                "static_prefix": static(""),
+                "bypass_cache": settings.DEBUG,
+            },
+            content_type="application/javascript",
+        )
         response["Service-Worker-Allowed"] = "/"
-        if not settings.DEBUG:
-            response["Cache-Control"] = "no-cache"
+        response["Cache-Control"] = "no-cache"
         return response
 
 
