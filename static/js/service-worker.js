@@ -22,7 +22,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+  // htmx fragments share the page URL (ADR-0003); caching them would serve a fragment as a page.
+  if (event.request.method !== "GET" || event.request.headers.has("HX-Request")) {
     return;
   }
 
