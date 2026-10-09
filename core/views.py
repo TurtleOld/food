@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime
 import hashlib
 import json
@@ -7,7 +8,8 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.models import AnonymousUser
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
@@ -15,9 +17,16 @@ from django.shortcuts import redirect, render
 from django.templatetags.static import static
 from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
-from core.diary import day_summary, kcal_from_macros, meal_slots, rings
+from core.diary import day_summary, kcal_from_macros, last_amount, meal_slots, rings
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
@@ -25,7 +34,10 @@ from core.forms import (
     ProductCreateForm,
     ProductEditForm,
 )
+from core.htmx import FragmentMixin, HtmxLoginRequiredMixin, sheet_saved_response
 from core.models import DailyTarget, DiaryEntry, Product
+
+QUICK_AMOUNTS = (50, 100, 150, 200)
 
 
 def _parse_date(value: str) -> datetime.date:
@@ -41,31 +53,39 @@ def _day_url(date: datetime.date) -> str:
     return reverse("core:day_on", args=[date.isoformat()])
 
 
-class DayView(LoginRequiredMixin, TemplateView):
+def _day_context(
+    member: AbstractBaseUser | AnonymousUser, current_date: datetime.date
+) -> dict[str, Any]:
+    """Собирает контекст страницы дня и её фрагмента `feed`."""
+    summary = day_summary(member, current_date)
+    return {
+        "current_date": current_date,
+        "previous_date": current_date - datetime.timedelta(days=1),
+        "next_date": current_date + datetime.timedelta(days=1),
+        "today": datetime.date.today(),
+        "meals": summary.meals,
+        "slots": meal_slots(summary.meals),
+        "rings": rings(summary.totals, summary.progress),
+        "totals": summary.totals,
+        "progress": summary.progress,
+    }
+
+
+class DayView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
     """Личная страница дня участника с итогами по Приёмам пищи."""
 
     template_name = "core/day.html"
+    fragment_template_name = "core/day.html#feed"
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         date = self.kwargs.get("date")
         current_date = _parse_date(date) if date is not None else datetime.date.today()
-        summary = day_summary(self.request.user, current_date)
-        context.update(
-            current_date=current_date,
-            previous_date=current_date - datetime.timedelta(days=1),
-            next_date=current_date + datetime.timedelta(days=1),
-            today=datetime.date.today(),
-            meals=summary.meals,
-            slots=meal_slots(summary.meals),
-            rings=rings(summary.totals, summary.progress),
-            totals=summary.totals,
-            progress=summary.progress,
-        )
+        context.update(_day_context(self.request.user, current_date))
         return context
 
 
-class OwnEntryMixin(LoginRequiredMixin):
+class OwnEntryMixin(HtmxLoginRequiredMixin):
     """Ограничивает записи дневника записями текущего участника."""
 
     request: HttpRequest
@@ -75,7 +95,7 @@ class OwnEntryMixin(LoginRequiredMixin):
         return DiaryEntry.objects.filter(member_id=self.request.user.pk)
 
 
-class EntryCreateView(LoginRequiredMixin, CreateView):
+class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
     """Создаёт запись дневника текущего участника на заданный день."""
 
     form_class = DiaryEntryForm
@@ -100,23 +120,59 @@ class EntryCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class EntryUpdateView(OwnEntryMixin, UpdateView):
+class EntryUpdateView(OwnEntryMixin, FragmentMixin, UpdateView):
     """Редактирует запись дневника текущего участника."""
 
     form_class = DiaryEntryEditForm
     template_name = "core/entry_form.html"
+    fragment_template_name = "core/entry_form.html#form"
     context_object_name = "entry"
+
+    def get_object(self, queryset: QuerySet[DiaryEntry] | None = None) -> DiaryEntry:
+        entry = super().get_object(queryset)
+        # Форма меняет instance при валидации; лента после сохранения — того дня, откуда открыли.
+        self.opened_from_date = entry.date
+        return entry
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         messages.success(self.request, "Запись обновлена")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        if not self.request.htmx:  # type: ignore[attr-defined]
+            return response
+        context = _day_context(self.request.user, self.opened_from_date)
+        return sheet_saved_response(self.request, "core/day.html#feed", context, "#feed")
 
     def get_success_url(self) -> str:
         return _day_url(self.object.date)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context["cancel_url"] = _day_url(self.object.date)
+        entry = self.object
+        context["cancel_url"] = _day_url(entry.date)
+        context["last_amount"] = last_amount(self.request.user, entry.product, exclude=entry)
+        context["quick_amounts"] = QUICK_AMOUNTS
+        context["macros"] = entry
+        return context
+
+
+class EntryPreviewView(OwnEntryMixin, DetailView):
+    """Живой пересчёт КБЖУ записи для введённого количества по её снапшоту."""
+
+    template_name = "core/entry_form.html#macros"
+    context_object_name = "entry"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        form = DiaryEntryEditForm(
+            {
+                "date": self.object.date,
+                "meal_type": self.object.meal_type,
+                "amount": self.request.GET.get("amount", ""),
+            },
+            instance=copy.copy(self.object),
+        )
+        # Валидный instance получает введённое количество; формула та же, что у записи.
+        context["macros"] = form.instance if form.is_valid() else None
         return context
 
 
@@ -139,7 +195,7 @@ class EntryDeleteView(OwnEntryMixin, DeleteView):
         return context
 
 
-class DailyTargetUpdateView(LoginRequiredMixin, UpdateView):
+class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
     """Редактирует собственную Суточную цель участника, создавая её при первом сохранении."""
 
     form_class = DailyTargetForm
@@ -214,7 +270,7 @@ class ServiceWorkerView(View):
         return response
 
 
-class ProductListView(LoginRequiredMixin, ListView):
+class ProductListView(HtmxLoginRequiredMixin, ListView):
     """Общий Каталог продуктов с фильтром по названию."""
 
     template_name = "core/product_list.html"
@@ -239,7 +295,7 @@ class ProductListView(LoginRequiredMixin, ListView):
         return context
 
 
-class ProductCreateView(LoginRequiredMixin, CreateView):
+class ProductCreateView(HtmxLoginRequiredMixin, CreateView):
     """Создаёт продукт Каталога с автором из текущего участника."""
 
     form_class = ProductCreateForm
@@ -252,7 +308,7 @@ class ProductCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class ProductUpdateView(LoginRequiredMixin, UpdateView):
+class ProductUpdateView(HtmxLoginRequiredMixin, UpdateView):
     """Редактирует любой продукт Каталога; базовая единица остаётся прежней."""
 
     model = Product
@@ -266,7 +322,7 @@ class ProductUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class ProductDeleteView(LoginRequiredMixin, DeleteView):
+class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
     """Удаляет продукт Каталога, если на него не ссылаются записи дневника."""
 
     model = Product

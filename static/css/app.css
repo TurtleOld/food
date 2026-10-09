@@ -506,3 +506,121 @@ body:has(.login) {
     grid-template-columns: 1.1fr 1fr;
   }
 }
+
+[x-cloak] {
+  display: none !important;
+}
+
+/* Entry sheet: bottom drawer on phones, centred modal on desktop. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: hsl(220 30% 10% / 0.45);
+}
+
+.sheet {
+  position: fixed;
+  z-index: 45;
+  inset: auto 0 0 0;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--bulma-scheme-main);
+  border-radius: var(--bulma-radius-large) var(--bulma-radius-large) 0 0;
+  box-shadow: var(--soft-shadow);
+  padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+
+.sheet-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .sheet {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: 30rem;
+    border-radius: var(--bulma-radius-large);
+  }
+}
+
+.amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.amount-input {
+  width: 8rem;
+  border: 0;
+  background: none;
+  color: var(--bulma-text-strong);
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  padding: 0;
+}
+
+.amount-input:focus {
+  outline: none;
+}
+
+.quick-amounts,
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  cursor: pointer;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: var(--bulma-background);
+  color: var(--bulma-text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chip:has(input:checked) {
+  background: var(--bulma-primary);
+  color: var(--bulma-primary-invert);
+}
+
+.chip:has(input:focus-visible) {
+  outline: 2px solid var(--bulma-primary);
+}
+
+.macros-row {
+  display: flex;
+  gap: 1.25rem;
+  margin: 1rem 0;
+}
+
+.macro::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: var(--dot);
+}
+
+.field-day {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1rem;
+}

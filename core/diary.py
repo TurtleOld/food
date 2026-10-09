@@ -8,7 +8,7 @@ from typing import TypedDict
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
 
-from core.models import DailyTarget, DiaryEntry
+from core.models import DailyTarget, DiaryEntry, Product
 
 
 class Macros(TypedDict):
@@ -161,3 +161,20 @@ def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
         pct = min(100, int(value / goal * 100)) if goal else 0
         result.append(Ring(label=label, value=value, goal=goal, pct=pct, over=value > goal))
     return result
+
+
+def last_amount(
+    member: AbstractBaseUser | AnonymousUser, product: Product, exclude: DiaryEntry | None = None
+) -> Decimal | None:
+    """Возвращает последнее количество продукта у участника (None, если записей нет).
+
+    Args:
+        member: участник, чей дневник читается.
+        product: продукт записи.
+        exclude: запись, которую не учитывать (правимая сейчас).
+    """
+    entries = DiaryEntry.objects.filter(member_id=member.pk, product=product)
+    if exclude is not None:
+        entries = entries.exclude(pk=exclude.pk)
+    latest = entries.order_by("-created_at", "-pk").first()
+    return latest.amount if latest else None
