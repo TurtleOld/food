@@ -17,7 +17,7 @@ from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
-from core.diary import day_summary
+from core.diary import day_summary, meal_slots, rings
 from core.forms import (
     DailyTargetForm,
     DiaryEntryEditForm,
@@ -55,7 +55,10 @@ class DayView(LoginRequiredMixin, TemplateView):
             current_date=current_date,
             previous_date=current_date - datetime.timedelta(days=1),
             next_date=current_date + datetime.timedelta(days=1),
+            today=datetime.date.today(),
             meals=summary.meals,
+            slots=meal_slots(summary.meals),
+            rings=rings(summary.totals, summary.progress),
             totals=summary.totals,
             progress=summary.progress,
         )

@@ -25,7 +25,7 @@ class LoginTest(TestCase):
         )
 
         self.assertContains(response, "alice")
-        self.assertContains(response, "Записей пока нет")
+        self.assertContains(response, "· добавить", count=5)
 
     def test_login_returns_to_requested_page(self):
         response = self.client.post(
