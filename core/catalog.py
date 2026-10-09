@@ -1,10 +1,12 @@
 """Каталог: подсчёт использования Продукта и снимок для «Вернуть» при его удалении."""
 
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
 from django.db.models import Q
 
+from core.barcodes import normalize_barcode
 from core.diary import search_products
 from core.models import Barcode, Product
 from core.undo import CannotUndo, Member, Restored, make_token, restorer
@@ -91,3 +93,37 @@ def search_catalog(query: str) -> list[Product]:
         for product in Product.objects.filter(matching).distinct():
             found[product.pk] = product
     return sorted(found.values(), key=lambda product: product.name)
+
+
+CODE_QUERY_MIN_DIGITS = 6
+
+
+@dataclass(frozen=True)
+class CodeSearch:
+    """Исход поиска по цифрам Штрихкода в шторке записи.
+
+    `code` задан только у полного валидного кода; `product` — Продукт, которому он принадлежит.
+    У неполного кода `note` объясняет, что идёт поиск по префиксу, и `products` — его совпадения.
+    """
+
+    code: str | None
+    product: Product | None
+    note: str
+    products: list[Product]
+
+
+def search_by_code(query: str) -> CodeSearch | None:
+    """Распознаёт запрос из 6+ цифр как Штрихкод; для обычного запроса возвращает `None`."""
+    digits = "".join(query.split())
+    if not (digits.isascii() and digits.isdigit()) or len(digits) < CODE_QUERY_MIN_DIGITS:
+        return None
+    code = normalize_barcode(digits)
+    if code is None:
+        return CodeSearch(
+            code=None,
+            product=None,
+            note="Код неполный или неверная контрольная цифра — ищем по началу кода в каталоге",
+            products=search_catalog(digits),
+        )
+    barcode = Barcode.objects.select_related("product").filter(code=code).first()
+    return CodeSearch(code=code, product=barcode.product if barcode else None, note="", products=[])

@@ -3,31 +3,71 @@
 
 {% partialdef results inline %}
 <div id="search-results">
-  {% if query %}
+  {% if code_search %}
+    <p class="muted is-size-7 mb-2">Штрихкод</p>
+    {% if code_search.code %}
+      {% if code_search.product %}
+        <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ code_search.product.pk }}&meal={{ meal }}&hour={{ hour }}&code={{ code_search.code }}"
+           hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ code_search.product.pk }}&meal={{ meal }}&hour={{ hour }}&code={{ code_search.code }}" hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">{{ code_search.product.name }} <span class="chip">▦ в каталоге</span></span>
+          <span class="entry-detail is-size-7 muted">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
+        </a>
+      {% else %}
+        {% url 'core:entry_product_new' date.isoformat as new_url %}
+        <a class="result" href="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
+           hx-get="{{ new_url }}?code={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">+ Новый продукт со штрихкодом</span>
+          <span class="entry-detail is-size-7 muted">в каталоге нет — заполните по упаковке</span>
+        </a>
+        <a class="result" href="{% url 'core:entry_create' date.isoformat %}?bind={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}"
+           hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ code_search.code }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="muted">Уже есть в каталоге? Привязать код к продукту</span>
+        </a>
+      {% endif %}
+    {% else %}
+      <p class="muted is-size-7 mb-2">{{ code_search.note }}</p>
+    {% endif %}
+  {% endif %}
+  {% if query and not code_search.code %}
     {% for product in products %}
-      <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}"
-         hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
-        <span class="entry-name">{{ product.name }}</span>
-        <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
-      </a>
+      {% if bind %}
+        <button type="button" class="result" hx-post="{% url 'core:entry_barcode_bind' date.isoformat %}"
+                hx-vals='{"product": "{{ product.pk }}", "code": "{{ bind }}", "meal": "{{ meal }}", "hour": "{{ hour }}"}' hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">{{ product.name }}</span>
+          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+        </button>
+      {% else %}
+        <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}"
+           hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">{{ product.name }}</span>
+          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+        </a>
+      {% endif %}
     {% empty %}
       <p class="muted">Ничего не найдено</p>
     {% endfor %}
-    {% if not query.isdigit %}
+    {% if not query.isdigit and not bind %}
       {% url 'core:entry_product_new' date.isoformat as new_url %}
       <a class="result" href="{{ new_url }}?name={{ query|urlencode }}&meal={{ meal }}&hour={{ hour }}"
          hx-get="{{ new_url }}?name={{ query|urlencode }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
         <span class="entry-name">+ Новый продукт «{{ query }}»</span>
       </a>
     {% endif %}
-  {% else %}
+  {% elif not query %}
     {% if recent %}<p class="muted is-size-7 mb-2">Недавние</p>{% endif %}
     {% for item in recent %}
-      <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}"
-         hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
-        <span class="entry-name">{{ item.product.name }}</span>
-        <span class="entry-detail is-size-7 muted num">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span>
-      </a>
+      {% if bind %}
+        <button type="button" class="result" hx-post="{% url 'core:entry_barcode_bind' date.isoformat %}"
+                hx-vals='{"product": "{{ item.product.pk }}", "code": "{{ bind }}", "meal": "{{ meal }}", "hour": "{{ hour }}"}' hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">{{ item.product.name }}</span>
+        </button>
+      {% else %}
+        <a class="result" href="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}"
+           hx-get="{% url 'core:entry_create' date.isoformat %}?product={{ item.product.pk }}&meal={{ meal }}&hour={{ hour }}" hx-target="#sheet-body" hx-swap="innerHTML">
+          <span class="entry-name">{{ item.product.name }}</span>
+          <span class="entry-detail is-size-7 muted num">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span>
+        </a>
+      {% endif %}
     {% endfor %}
   {% endif %}
 </div>
@@ -35,14 +75,14 @@
 
 {% partialdef search inline %}
 <div class="sheet-step" x-data>
-  <h2 class="title is-4 mb-3">Что съели?</h2>
+  <h2 class="title is-4 mb-3">{% if bind %}Привязать ▦ {{ bind }} к продукту{% else %}Что съели?{% endif %}</h2>
   <input class="input" type="search" name="q" autocomplete="off" autofocus
          placeholder="Название или цифры штрихкода" aria-label="Поиск продукта"
          hx-get="{% url 'core:entry_search' date.isoformat %}" hx-trigger="input changed delay:250ms, search"
-         hx-target="#search-results" hx-swap="outerHTML" hx-include="this" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}"}'
+         hx-target="#search-results" hx-swap="outerHTML" hx-include="this" hx-vals='{"meal": "{{ request.GET.meal }}", "hour": "{{ request.GET.hour }}", "bind": "{{ bind }}"}'
          @keydown.enter.prevent="$root.querySelector('.result')?.click()">
   <div class="mt-4">
-    {% include "core/entry_sheet.html#results" with query="" products=None meal=request.GET.meal hour=request.GET.hour %}
+    {% include "core/entry_sheet.html#results" with query="" products=None meal=request.GET.meal hour=request.GET.hour bind=bind %}
   </div>
 </div>
 {% endpartialdef %}
@@ -63,6 +103,10 @@
   {{ form.product }}
   <h2 class="title is-4 mb-1">{{ product.name }}</h2>
   {% if product %}<p class="muted is-size-7 mb-4">КБЖУ на 100 {{ product.get_base_unit_display }}: {{ product.calories|whole }} ккал</p>{% endif %}
+  {% if code %}
+    <button type="button" class="button is-small is-ghost mb-3" hx-post="{% url 'core:entry_barcode_unbind' date.isoformat %}" hx-params="none"
+            hx-vals='{"code": "{{ code }}", "meal": "{{ form.meal_type.value }}"}' hx-target="#sheet-body" hx-swap="innerHTML">Не тот продукт?</button>
+  {% endif %}
 
   {{ form.non_field_errors }}
   {% for error in form.product.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
