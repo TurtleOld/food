@@ -37,10 +37,14 @@
     <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
        hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
   {% else %}
-  <div class="barcode-input is-flex" style="gap: .5rem">
-    {{ form.barcode }}
-    {# Сканер камерой появится в тикете «Сканер камерой и фото». #}
-    <button class="button" type="button" disabled title="Скоро" aria-label="Сканер">{% include "components/icons/scan.html" %}</button>
+  <div x-data="scanner" @input="typed = $event.target.value.trim() !== ''">
+    <div class="barcode-input is-flex" style="gap: .5rem">
+      {{ form.barcode }}
+      <button class="button" type="button" aria-label="Сканер штрихкода" @click="typed ? $el.form.requestSubmit() : toggle()">
+        <span x-show="!typed">{% include "components/icons/scan.html" %}</span><span x-show="typed" x-cloak>добавить</span>
+      </button>
+    </div>
+    {% include "components/scanner_strip.html" with field="input[name=barcode]" where="в поле" %}
   </div>
   {% endif %}
   {% for error in form.barcode.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
