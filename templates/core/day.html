@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load nutrition %}
+{% load nutrition carry %}
 
 {% block content %}
   <div class="day-layout" x-data="sheetHost" @keydown.escape.window="closeSheet()" @sheet:close.window="closeSheet(true)">
@@ -67,12 +67,12 @@
                     <span class="entry-kcal num">{{ entry.calories|whole }}</span>
                   </a>
                 {% endfor %}
-                <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ row.type }}"
-                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ row.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="muted">+ добавить</span></a>
+                <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
+                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="muted">+ добавить</span></a>
               </div>
             {% else %}
-              <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?meal={{ row.type }}"
-                 hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals='{"meal": "{{ row.type }}"}' hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ row.label }}</span> <span class="muted">· добавить</span></a>
+              <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
+                 hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ row.label }}</span> <span class="muted">· добавить</span></a>
             {% endif %}
           </div>
         {% endfor %}

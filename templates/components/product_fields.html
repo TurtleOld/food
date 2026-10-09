@@ -1,3 +1,4 @@
+{% load carry %}
 {% comment %}Общие поля Продукта: название, единица чипами и КБЖУ на 100 г / мл. Контекст: `form`.{% endcomment %}
 <div class="field">
   <label class="label" for="{{ form.name.id_for_label }}">Название</label>
@@ -41,8 +42,8 @@
     <div id="barcodes" class="chips mb-2"><span class="chip num">▦ {{ bound_code }}</span></div>
     <input type="hidden" name="barcode" value="{{ bound_code }}">
     {% if date %}
-      <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
-         hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+      <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?{% query_string bind=bound_code meal=meal hour=hour %}"
+         hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string bind=bound_code meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
     {% endif %}
   {% else %}
   <div x-data="scanner" @input="typed = $event.target.value.trim() !== ''">

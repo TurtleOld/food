@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 
 from core.barcodes import normalize_barcode
 from core.diary import search_products
@@ -17,6 +17,14 @@ from core.undo import CannotUndo, Member, Restored, make_token, restorer
 def entries_count(product: Product) -> int:
     """Число записей дневника, которые ссылаются на Продукт."""
     return product.diary_entries.count()
+
+
+def catalog_products(query: str = "") -> QuerySet[Product]:
+    """Продукты Каталога с кодами; при непустом `query` — только совпадения с ним."""
+    products = Product.objects.prefetch_related("barcodes")
+    if query:
+        products = products.filter(pk__in=[product.pk for product in search_catalog(query)])
+    return products
 
 
 def bind_barcode(code: str, product: Product) -> Barcode:

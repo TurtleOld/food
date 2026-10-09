@@ -29,18 +29,29 @@ from django.views.generic import (
 from django_htmx.http import trigger_client_event
 
 from core.barcodes import normalize_barcode
-from core.catalog import bind_barcode, entries_count, search_by_code, search_catalog
+from core.catalog import (
+    bind_barcode,
+    catalog_products,
+    entries_count,
+    search_by_code,
+    search_catalog,
+    unbind_barcode,
+)
 from core.catalog import deletion_token as product_deletion_token
 from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
     addition_token,
     day_summary,
     deletion_token,
+    draft_entry,
     edit_token,
+    entry_added_text,
+    initial_meal,
     kcal_from_macros,
     last_amount,
-    meal_for_hour,
     meal_rows,
+    parse_hour,
+    parse_meal,
     recent_products,
     rings,
     search_products,
@@ -131,6 +142,16 @@ class OwnEntryMixin(HtmxLoginRequiredMixin):
         return DiaryEntry.objects.filter(member_id=self.request.user.pk)
 
 
+class SheetModeMixin:
+    """Различает запрос из шторки (htmx) и обычную страницу."""
+
+    request: HttpRequest
+
+    @property
+    def in_sheet(self) -> bool:
+        return bool(self.request.htmx)  # type: ignore[attr-defined]
+
+
 class BarcodeAddMixin:
     """Кнопка «добавить» у Цифр штрихкода: привязывает только код, остальные правки не сохраняет.
 
@@ -157,7 +178,7 @@ class BarcodeAddMixin:
         return self.render_to_response(context)  # type: ignore[attr-defined]
 
 
-class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
+class EntryCreateView(HtmxLoginRequiredMixin, SheetModeMixin, CreateView):
     """Создаёт запись дневника текущего участника на заданный день.
 
     Без htmx это обычная страница с формой. Из шторки GET без `product` — шаг поиска,
@@ -170,10 +191,6 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
         super().setup(request, *args, **kwargs)
         self.entry_date = _parse_date(kwargs["date"])
 
-    @property
-    def in_sheet(self) -> bool:
-        return bool(self.request.htmx)  # type: ignore[attr-defined]
-
     def get_form_class(self) -> type[ModelForm[Any]]:
         return DiaryEntrySheetForm if self.in_sheet else DiaryEntryForm
 
@@ -185,14 +202,10 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
         return ["core/entry_sheet.html#amount"]
 
     def _meal(self) -> str:
-        meal = self.request.GET.get("meal", "")
-        if meal in DiaryEntry.MealType.values:
-            return meal
-        try:
-            hour = int(self.request.GET["hour"])
-        except (KeyError, ValueError):
-            hour = datetime.datetime.now().hour
-        return meal_for_hour(min(max(hour, 0), 23))
+        carried = _carried_meal(self.request.GET)
+        return initial_meal(
+            carried.get("meal", ""), carried.get("hour", ""), datetime.datetime.now()
+        )
 
     def get_initial(self) -> dict[str, Any]:
         initial: dict[str, Any] = {"date": self.entry_date, "meal_type": self._meal()}
@@ -210,9 +223,7 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
             return super().form_valid(form)
         super().form_valid(form)
         entry: DiaryEntry = form.instance
-        amount = f"{entry.amount:g} {entry.product.get_base_unit_display()}"
-        text = f"{entry.product.name}, {amount} → {entry.get_meal_type_display()}"
-        add_undo_message(self.request, text, addition_token(entry))
+        add_undo_message(self.request, entry_added_text(entry), addition_token(entry))
         context = _day_context(self.request.user, self.entry_date)
         return sheet_saved_response(self.request, "core/day.html#feed", context, "#feed")
 
@@ -223,8 +234,10 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context.update(date=self.entry_date, cancel_url=_day_url(self.entry_date))
         if self.in_sheet:
+            carried = _carried_meal(self.request.GET)
             context["bind"] = normalize_barcode(self.request.GET.get("bind", "")) or ""
             context["code"] = normalize_barcode(self.request.GET.get("code", "")) or ""
+            context.update(meal=carried.get("meal", ""), hour=carried.get("hour", ""))
             form = context["form"]
             product = Product.objects.filter(pk=_pk(form["product"].value())).first()
             context.update(
@@ -235,28 +248,8 @@ class EntryCreateView(HtmxLoginRequiredMixin, CreateView):
                 recent=recent_products(self.request.user),
             )
             if product:
-                context["macros"] = _draft_entry(product, form["amount"].value())
+                context["macros"] = draft_entry(product, form["amount"].value())
         return context
-
-
-def _draft_entry(product: Product, amount: Any) -> DiaryEntry | None:
-    """Несохранённая запись для показа КБЖУ; `None`, если количество не проходит валидацию."""
-    form = DiaryEntrySheetForm(
-        {
-            "date": datetime.date.today(),
-            "meal_type": DiaryEntry.MealType.LUNCH,
-            "product": product.pk,
-            "amount": amount or "",
-        }
-    )
-    if not form.is_valid():
-        return None
-    entry = form.instance
-    entry.calories_snapshot = product.calories
-    entry.proteins_snapshot = product.proteins
-    entry.fats_snapshot = product.fats
-    entry.carbs_snapshot = product.carbs
-    return entry
 
 
 class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
@@ -269,8 +262,7 @@ class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
         query = self.request.GET.get("q", "").strip()
         context.update(
             date=_parse_date(self.kwargs["date"]),
-            meal=self.request.GET.get("meal", ""),
-            hour=self.request.GET.get("hour", ""),
+            **{"meal": "", "hour": "", **_carried_meal(self.request.GET)},
             query=query,
             bind=normalize_barcode(self.request.GET.get("bind", "")) or "",
         )
@@ -325,7 +317,7 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CreateView
         return initial
 
     def _carried(self) -> dict[str, str]:
-        carried = {key: self.request.GET.get(key, "") for key in ("meal", "hour")}
+        carried = _carried_meal(self.request.GET)
         if code := self._code():
             carried["code"] = code
         return carried
@@ -347,46 +339,54 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CreateView
             carried=urlencode(self._carried()),
             bound_code=self._code(),
             off=self._off(),
-            meal_hour=urlencode({k: v for k, v in self._carried().items() if k != "code"}),
+            **{"meal": "", "hour": "", **_carried_meal(self.request.GET)},
         )
         return context
 
 
-class EntryBarcodeBindView(HtmxLoginRequiredMixin, View):
+def _carried_meal(data: Any) -> dict[str, str]:
+    """Приём пищи и час, которые шторка переносит между шагами; невалидные отбрасываются."""
+    carried = {"meal": parse_meal(data.get("meal", "")), "hour": parse_hour(data.get("hour", ""))}
+    return {key: value for key, value in carried.items() if value}
+
+
+class EntryBarcodeActionView(HtmxLoginRequiredMixin, View):
+    """Каркас действий над кодом в шторке: разобрать код, выполнить, перейти к следующему шагу."""
+
+    http_method_names = ["post"]
+    next_route: str
+
+    def apply(self, request: HttpRequest, code: str) -> dict[str, str]:
+        """Выполняет действие и возвращает параметры первого места в запросе следующего шага."""
+        raise NotImplementedError
+
+    def post(self, request: HttpRequest, date: str) -> HttpResponse:
+        code = normalize_barcode(request.POST.get("code", ""))
+        if code is None:
+            raise Http404("Неверный штрихкод")
+        query = {**self.apply(request, code), **_carried_meal(request.POST)}
+        url = reverse(self.next_route, args=[_parse_date(date).isoformat()])
+        return redirect(f"{url}?{urlencode(query)}")
+
+
+class EntryBarcodeBindView(EntryBarcodeActionView):
     """Привязывает код к выбранному в шторке Продукту и ведёт на шаг количества."""
 
-    http_method_names = ["post"]
+    next_route = "core:entry_create"
 
-    def post(self, request: HttpRequest, date: str) -> HttpResponse:
-        code = normalize_barcode(request.POST.get("code", ""))
-        if code is None:
-            raise Http404("Неверный штрихкод")
+    def apply(self, request: HttpRequest, code: str) -> dict[str, str]:
         product = get_object_or_404(Product, pk=_pk(request.POST.get("product")))
-        # Чужой код не отбираем: перенос — отдельное явное действие в форме Продукта.
-        barcode, _ = Barcode.objects.get_or_create(code=code, defaults={"product": product})
-        query = urlencode({"product": barcode.product_id, **_carried_meal(request.POST)})
-        url = reverse("core:entry_create", args=[_parse_date(date).isoformat()])
-        return redirect(f"{url}?{query}")
+        return {"product": str(bind_barcode(code, product).product_id)}
 
 
-class EntryBarcodeUnbindView(HtmxLoginRequiredMixin, View):
+class EntryBarcodeUnbindView(EntryBarcodeActionView):
     """«Не тот продукт?»: отвязывает код и возвращает к форме нового Продукта с этим кодом."""
 
-    http_method_names = ["post"]
+    next_route = "core:entry_product_new"
 
-    def post(self, request: HttpRequest, date: str) -> HttpResponse:
-        code = normalize_barcode(request.POST.get("code", ""))
-        if code is None:
-            raise Http404("Неверный штрихкод")
-        Barcode.objects.filter(code=code).delete()
-        query = urlencode({"code": code, **_carried_meal(request.POST)})
-        url = reverse("core:entry_product_new", args=[_parse_date(date).isoformat()])
-        return redirect(f"{url}?{query}")
-
-
-def _carried_meal(data: Any) -> dict[str, str]:
-    """Приём пищи и час, которые шторка переносит между шагами."""
-    return {key: data.get(key, "") for key in ("meal", "hour")}
+    def apply(self, request: HttpRequest, code: str) -> dict[str, str]:
+        unbind_barcode(code)
+        return {"code": code}
 
 
 class EntryDraftPreviewView(HtmxLoginRequiredMixin, TemplateView):
@@ -397,7 +397,7 @@ class EntryDraftPreviewView(HtmxLoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         product = get_object_or_404(Product, pk=_pk(self.request.GET.get("product")))
-        context["macros"] = _draft_entry(product, self.request.GET.get("amount"))
+        context["macros"] = draft_entry(product, self.request.GET.get("amount"))
         return context
 
 
@@ -599,10 +599,11 @@ class ServiceWorkerView(View):
 
 def _catalog_context(query: str = "") -> dict[str, Any]:
     """Контекст фрагмента списка Каталога: совпадения с запросом и общее число продуктов."""
-    products = Product.objects.prefetch_related("barcodes")
-    if query:
-        products = products.filter(pk__in=[product.pk for product in search_catalog(query)])
-    return {"products": products, "total": Product.objects.count(), "query": query}
+    return {
+        "products": catalog_products(query),
+        "total": Product.objects.count(),
+        "query": query,
+    }
 
 
 class ProductListView(HtmxLoginRequiredMixin, FragmentMixin, ListView):
@@ -613,7 +614,7 @@ class ProductListView(HtmxLoginRequiredMixin, FragmentMixin, ListView):
     context_object_name = "products"
 
     def get_queryset(self) -> QuerySet[Product]:
-        return _catalog_context(self.query())["products"]
+        return catalog_products(self.query())
 
     def query(self) -> str:
         return self.request.GET.get("q", "").strip()
@@ -624,14 +625,8 @@ class ProductListView(HtmxLoginRequiredMixin, FragmentMixin, ListView):
         return context
 
 
-class CatalogSheetMixin:
+class CatalogSheetMixin(SheetModeMixin):
     """Продукт Каталога в шторке при htmx-запросе; без htmx остаётся обычная страница."""
-
-    request: HttpRequest
-
-    @property
-    def in_sheet(self) -> bool:
-        return bool(self.request.htmx)  # type: ignore[attr-defined]
 
     def get_template_names(self) -> list[str]:
         if self.in_sheet:
