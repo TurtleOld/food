@@ -750,3 +750,37 @@ body:has(.login) {
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* The close button floats over the sheet's top-right corner, so long titles keep clear of it. */
+.sheet .title {
+  padding-right: 2.5rem;
+  overflow-wrap: anywhere;
+}
+
+/* Quick-amount chips replace the spinner arrows, which nobody uses on a phone. */
+.amount-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.amount-input::-webkit-inner-spin-button,
+.amount-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.field-day input[type="date"] {
+  border: 0;
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light dark;
+}
+
+.field-day input[type="date"]:focus {
+  outline: 2px solid var(--bulma-primary);
+  outline-offset: 1px;
+}
