@@ -8,15 +8,40 @@ from core.models import DailyTarget, DiaryEntry, Product
 NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
 
 
-class ProductCreateForm(forms.ModelForm):
+NUTRITION_ROWS = [
+    ("calories", "kcal", "ккал"),
+    ("proteins", "p", "Б"),
+    ("fats", "f", "Ж"),
+    ("carbs", "c", "У"),
+]
+
+
+class ProductFieldsForm(forms.ModelForm):
+    """Основа форм Продукта: поля КБЖУ для общего компонента `components/product_fields.html`."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for name in NUTRITION_FIELDS:
+            self.fields[name].widget.attrs.update(
+                {"class": "input num", "step": "0.1", "min": "0", "inputmode": "decimal"}
+            )
+
+    @property
+    def nutrition_rows(self) -> list[tuple[Any, str, str]]:
+        """Поля КБЖУ с цветом точки и подписью в порядке показа."""
+        return [(self[name], dot, label) for name, dot, label in NUTRITION_ROWS]
+
+
+class ProductCreateForm(ProductFieldsForm):
     """Форма создания продукта: базовая единица задаётся один раз."""
 
     class Meta:
         model = Product
         fields = ["name", "base_unit", *NUTRITION_FIELDS]
+        widgets = {"base_unit": forms.RadioSelect}
 
 
-class ProductEditForm(forms.ModelForm):
+class ProductEditForm(ProductFieldsForm):
     """Форма правки продукта: базовая единица недоступна для изменения."""
 
     class Meta:

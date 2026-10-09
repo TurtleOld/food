@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import datetime
 from typing import Any
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -238,6 +239,37 @@ class EntrySearchView(HtmxLoginRequiredMixin, TemplateView):
             context["products"] = search_products(query)
         else:
             context["recent"] = recent_products(self.request.user)
+        return context
+
+
+class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
+    """Шаг 1б шторки: новый Продукт по пути, после создания — шаг количества."""
+
+    form_class = ProductCreateForm
+    template_name = "core/product_sheet.html"
+
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        super().setup(request, *args, **kwargs)
+        self.entry_date = _parse_date(kwargs["date"])
+
+    def get_initial(self) -> dict[str, Any]:
+        return {"name": self.request.GET.get("name", "").strip()}
+
+    def _carried(self) -> dict[str, str]:
+        return {key: self.request.GET.get(key, "") for key in ("meal", "hour")}
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        form.instance.author = self.request.user
+        return super().form_valid(form)
+
+    def get_success_url(self) -> str:
+        product: Product = self.object  # type: ignore[assignment]
+        query = urlencode({"product": product.pk, **self._carried()})
+        return f"{reverse('core:entry_create', args=[self.entry_date.isoformat()])}?{query}"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(date=self.entry_date, carried=urlencode(self._carried()))
         return context
 
 
