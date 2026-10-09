@@ -159,6 +159,6 @@
   </label>
   {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
 
-  <button class="button is-primary is-fullwidth mt-5" type="submit">Добавить в <span x-text="meal">{{ meal_label|lower }}</span></button>
+  <button class="button is-primary is-fullwidth mt-5" type="submit"><span x-text="'Добавить в ' + meal">Добавить в {{ meal_label|lower }}</span></button>
 </form>
 {% endpartialdef %}
