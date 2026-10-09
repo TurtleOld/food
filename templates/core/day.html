@@ -91,9 +91,4 @@
   </section>
 
   <p><a href="{% url 'core:entry_create' current_date.isoformat %}">Добавить запись</a></p>
-
-  <form method="post" action="{% url 'core:logout' %}">
-    {% csrf_token %}
-    <button type="submit">Выйти</button>
-  </form>
 {% endblock %}
