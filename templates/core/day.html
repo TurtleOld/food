@@ -2,7 +2,7 @@
 {% load nutrition %}
 
 {% block content %}
-  <div class="day-layout">
+  <div class="day-layout" x-data="{ sheetOpen: false }" @keydown.escape.window="sheetOpen = false" @sheet:close.window="sheetOpen = false">
     <div class="datebar">
       <a class="btn-quiet" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день">‹</a>
       <div class="day">
@@ -56,7 +56,8 @@
                   <span class="muted num">{{ slot.calories|whole }} ккал</span>
                 </div>
                 {% for entry in slot.entries %}
-                  <a class="entry" href="{% url 'core:entry_edit' entry.pk %}">
+                  <a class="entry" href="{% url 'core:entry_edit' entry.pk %}"
+                     hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true">
                     <span>
                       <span class="entry-name">{{ entry.product.name }}</span>
                       <span class="entry-detail is-size-7 muted">{{ entry.amount }} {{ entry.product.get_base_unit_display }} · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
@@ -74,5 +75,10 @@
     </div>
   </div>
   {% endpartialdef %}
+    <div class="sheet-backdrop" x-show="sheetOpen" x-cloak @click="sheetOpen = false"></div>
+    <aside class="sheet" x-show="sheetOpen" x-cloak role="dialog" aria-modal="true" aria-label="Запись">
+      <button type="button" class="btn-quiet sheet-close" @click="sheetOpen = false" aria-label="Закрыть">{% include "components/icons/x.html" %}</button>
+      <div id="sheet-body"></div>
+    </aside>
   </div>
 {% endblock %}

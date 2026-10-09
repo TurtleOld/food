@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from django import forms
 
@@ -49,7 +49,15 @@ class DiaryEntryEditForm(DiaryEntryForm):
     class Meta:
         model = DiaryEntry
         fields = ["date", "meal_type", "amount"]
-        widgets = {"date": forms.DateInput(attrs={"type": "date"})}
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "meal_type": forms.RadioSelect,
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # Без пустого варианта: Приём пищи у записи всегда выбран.
+        cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
 
 
 class DailyTargetForm(forms.ModelForm):

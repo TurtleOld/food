@@ -42,7 +42,12 @@
       <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>{% include "components/icons/target.html" %}<span>Цель</span></a>
     </nav>
   {% endif %}
-  <div id="toasts" aria-live="polite">{% include "components/toasts.html" %}</div>
+  <div id="toasts" aria-live="polite">
+    {% include "components/toasts.html" %}
+    <div class="toast is-error" role="alert" x-data="{ shown: false, timer: null }" x-show="shown" x-cloak
+         @htmx:response-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)"
+         @htmx:send-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)">Не получилось, попробуйте ещё раз</div>
+  </div>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
