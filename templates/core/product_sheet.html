@@ -3,6 +3,7 @@
       hx-post="{% url 'core:entry_product_new' date.isoformat %}?{{ carried }}" hx-target="#sheet-body" hx-swap="innerHTML">
   {% csrf_token %}
   <h2 class="title is-4 mb-3">Новый продукт</h2>
+  {% if bound_code %}<p class="muted is-size-7 mb-3">Код не найден — заполните по упаковке</p>{% endif %}
   {{ form.non_field_errors }}
   {% include "components/product_fields.html" %}
   <button class="button is-primary is-fullwidth mt-5" type="submit">Создать и указать количество</button>

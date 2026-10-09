@@ -31,11 +31,18 @@
 <div class="field mt-4">
   <label class="label" for="{{ form.barcode.id_for_label }}">{{ form.barcode.label }}</label>
   {% if product %}{% include "components/barcode_chips.html" %}{% endif %}
+  {% if bound_code %}
+    <div id="barcodes" class="chips mb-2"><span class="chip num">▦ {{ bound_code }}</span></div>
+    <input type="hidden" name="barcode" value="{{ bound_code }}">
+    <a class="is-size-7" href="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}"
+       hx-get="{% url 'core:entry_create' date.isoformat %}?bind={{ bound_code }}&{{ meal_hour }}" hx-target="#sheet-body" hx-swap="innerHTML">Уже есть в каталоге? Выбрать</a>
+  {% else %}
   <div class="barcode-input is-flex" style="gap: .5rem">
     {{ form.barcode }}
     {# Сканер камерой появится в тикете «Сканер камерой и фото». #}
     <button class="button" type="button" disabled title="Скоро" aria-label="Сканер">{% include "components/icons/scan.html" %}</button>
   </div>
+  {% endif %}
   {% for error in form.barcode.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
   {% if form.barcode_owner %}
     <button class="button is-small mt-2" type="submit" name="transfer" value="1">Перенести сюда</button>
