@@ -27,9 +27,15 @@ class CannotUndo(Exception):
 
 @dataclass(frozen=True)
 class Restored:
-    """Итог восстановления: день, чью ленту надо перерисовать, если он есть."""
+    """Итог восстановления: что перерисовать на странице.
+
+    Attributes:
+        date: день записи, чья лента затронута, если такой есть.
+        product_id: Продукт, чьи чипы Штрихкодов затронуты, если такой есть.
+    """
 
     date: datetime.date | None = None
+    product_id: int | None = None
 
 
 Restorer = Callable[[Member, dict[str, Any]], Restored]

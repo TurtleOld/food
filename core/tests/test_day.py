@@ -84,6 +84,20 @@ class DayPageLanguageDTest(TestCase):
 
         self.assertContains(response, "Куриная грудка")
         self.assertContains(response, "330 ккал")
+        self.assertContains(
+            response, 'class="entry-kcal num">330 <small class="muted">ккал</small>'
+        )
+
+    def test_day_total_is_shown_with_and_without_target(self):
+        self._eat()
+
+        without_target = self.client.get(reverse("core:day"))
+        self._target()
+        with_target = self.client.get(reverse("core:day"))
+
+        for response in (without_target, with_target):
+            self.assertContains(response, "Итого за день:")
+            self.assertContains(response, "330 ккал</b>")
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
@@ -150,7 +164,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, 'type="date" value="2026-03-10"')
+        self.assertContains(response, "10/03/2026")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
 

@@ -50,7 +50,7 @@ class SheetBarcodeSearchTests(SheetBarcodeBase):
         self.assertContains(response, "Штрихкод")
         self.assertContains(response, "Курица")
         self.assertContains(response, "▦ в каталоге")
-        self.assertContains(response, f"?product={self.chicken.pk}&meal=")
+        self.assertContains(response, f"?product={self.chicken.pk}")
         self.assertNotContains(response, "Новый продукт")
 
     def test_spaced_upc_a_finds_the_same_product(self):
@@ -114,7 +114,7 @@ class SheetBarcodeSearchTests(SheetBarcodeBase):
         response = self.client.get(self.create_url, {"bind": OTHER_EAN13}, headers=HTMX)
 
         self.assertContains(response, OTHER_EAN13)
-        self.assertContains(response, f'"bind": "{OTHER_EAN13}"')
+        self.assertContains(response, f"&quot;bind&quot;: &quot;{OTHER_EAN13}&quot;")
 
 
 class SheetBarcodeNewProductTests(SheetBarcodeBase):

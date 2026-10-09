@@ -1,9 +1,9 @@
-{% comment %}Чипы Штрихкодов Продукта с отвязкой «×». Контекст: `product`.{% endcomment %}
-<div id="barcodes" class="chips mb-2">
+{% comment %}Чипы Штрихкодов Продукта с отвязкой «×». Контекст: `product`; `oob` — перерисовать открытую шторку этого Продукта.{% endcomment %}
+<div id="barcodes" class="chips mb-2" data-product="{{ product.pk }}"{% if oob %} hx-swap-oob="outerHTML:#barcodes[data-product='{{ product.pk }}']"{% endif %}>
   {% for barcode in product.barcodes.all %}
     <span class="chip num">▦ {{ barcode.code }}
       <button type="button" class="delete is-small" aria-label="Отвязать {{ barcode.code }}"
-              hx-post="{% url 'core:barcode_unbind' barcode.pk %}" hx-params="none" hx-target="#barcodes" hx-swap="outerHTML">×</button>
+              hx-post="{% url 'core:barcode_unbind' barcode.pk %}" hx-params="none" hx-target="#barcodes" hx-swap="outerHTML"></button>
     </span>
   {% endfor %}
 </div>
