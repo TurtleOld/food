@@ -93,3 +93,6 @@ LOGOUT_REDIRECT_URL = "core:login"
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 365
+
+# Контакт для User-Agent запросов к Open Food Facts: их правила требуют указать приложение и связь.
+OFF_CONTACT = os.environ.get("OFF_CONTACT", "dev@pavlovteam.ru")

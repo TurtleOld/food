@@ -61,6 +61,7 @@ from core.htmx import (
     with_toasts,
 )
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.off import OffLookup, Outcome, lookup
 from core.undo import add_undo_message, restore
 
 QUICK_AMOUNTS = (50, 100, 150, 200)
@@ -273,8 +274,29 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
     def _code(self) -> str:
         return normalize_barcode(self.request.GET.get("code", "")) or ""
 
+    def _off(self) -> OffLookup | None:
+        """Ответ Open Food Facts для кода, которого нет в Каталоге; иначе `None`."""
+        code = self._code()
+        if not code or Barcode.objects.filter(code=code).exists():
+            return None
+        return lookup(code)
+
     def get_initial(self) -> dict[str, Any]:
-        return {"name": self.request.GET.get("name", "").strip(), "barcode": self._code()}
+        initial: dict[str, Any] = {
+            "name": self.request.GET.get("name", "").strip(),
+            "barcode": self._code(),
+        }
+        off = self._off()
+        if off and off.outcome is Outcome.FOUND:
+            initial.update(
+                name=initial["name"] or off.name,
+                base_unit=off.base_unit,
+                calories=off.calories,
+                proteins=off.proteins,
+                fats=off.fats,
+                carbs=off.carbs,
+            )
+        return initial
 
     def _carried(self) -> dict[str, str]:
         carried = {key: self.request.GET.get(key, "") for key in ("meal", "hour")}
@@ -298,6 +320,7 @@ class EntryProductCreateView(HtmxLoginRequiredMixin, CreateView):
             date=self.entry_date,
             carried=urlencode(self._carried()),
             bound_code=self._code(),
+            off=self._off(),
             meal_hour=urlencode({k: v for k, v in self._carried().items() if k != "code"}),
         )
         return context

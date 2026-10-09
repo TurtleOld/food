@@ -1,3 +1,9 @@
+import io
+from email.message import Message
+from unittest import mock
+from urllib.error import HTTPError
+
+from django.core.cache import cache
 from django.urls import reverse
 
 from core.models import Barcode, Product
@@ -7,9 +13,19 @@ EAN13 = "4006381333931"
 OTHER_EAN13 = "4607000000014"
 
 
+def _off_not_found(*args, **kwargs):
+    body = io.BytesIO(b'{"result": {"id": "product_not_found"}}')
+    raise HTTPError("https://off.test", 404, "Not Found", Message(), body)
+
+
 class SheetBarcodeBase(SheetAddBase):
     def setUp(self):
         super().setUp()
+        # Тесты не ходят в сеть: по умолчанию Open Food Facts «не знает» ни одного кода.
+        cache.clear()
+        patcher = mock.patch("core.off.urlopen", side_effect=_off_not_found)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.new_url = reverse("core:entry_product_new", args=[self.today.isoformat()])
         self.bind_url = reverse("core:entry_barcode_bind", args=[self.today.isoformat()])
         self.unbind_url = reverse("core:entry_barcode_unbind", args=[self.today.isoformat()])
