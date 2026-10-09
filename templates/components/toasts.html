@@ -1,0 +1,3 @@
+{% for message in messages %}
+  <div class="toast{% if message.level_tag == 'error' %} is-error{% endif %}" role="status" x-data x-init="setTimeout(() => $el.remove(), 8000)">{{ message }}</div>
+{% endfor %}

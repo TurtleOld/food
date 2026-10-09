@@ -3,17 +3,45 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}КБЖУ Трекер{% endblock %}</title>
   <link rel="manifest" href="{% static 'manifest.webmanifest' %}">
   <link rel="icon" href="{% static 'icons/icon-192.png' %}">
   <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
   <meta name="theme-color" content="#107a57">
+  <link rel="stylesheet" href="{% static 'vendor/bulma/bulma-1.0.4.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'vendor/htmx/htmx-2.0.11.min.js' %}"></script>
+  <script>htmx.config.historyCacheSize = 0;</script>
+  <script defer src="{% static 'vendor/alpine/alpine-3.17.4.min.js' %}"></script>
 </head>
-<body>
-  <main>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% if user.is_authenticated %}
+    <header class="topbar">
+      <nav class="topbar-links" aria-label="Разделы">
+        <a href="{% url 'core:day' %}"{% if nav_section == 'diary' %} aria-current="page"{% endif %}>Дневник</a>
+        <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>Продукты</a>
+        <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>Цель</a>
+      </nav>
+      <form class="topbar-user" method="post" action="{% url 'core:logout' %}">
+        {% csrf_token %}
+        <span>{{ user.username }}</span>
+        <button class="btn-quiet" type="submit">{% include "components/icons/logout.html" %} Выйти</button>
+      </form>
+    </header>
+  {% endif %}
+  <main class="page">
     {% block content %}{% endblock %}
   </main>
+  {% if user.is_authenticated %}
+    <nav class="tabbar" aria-label="Разделы">
+      <a href="{% url 'core:day' %}"{% if nav_section == 'diary' %} aria-current="page"{% endif %}>{% include "components/icons/notebook.html" %}<span>Дневник</span></a>
+      <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>{% include "components/icons/apple.html" %}<span>Продукты</span></a>
+      <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>{% include "components/icons/target.html" %}<span>Цель</span></a>
+    </nav>
+  {% endif %}
+  <div id="toasts" aria-live="polite">{% include "components/toasts.html" %}</div>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

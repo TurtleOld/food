@@ -1,0 +1,177 @@
+:root {
+  --bulma-primary-h: 158deg;
+  --bulma-primary-s: 52%;
+  --bulma-primary-l: 42%;
+  --bulma-radius: 0.75rem;
+  --bulma-radius-large: 1.5rem;
+  --bulma-radius-small: 0.5rem;
+  --soft-shadow: 0 1px 2px hsl(220 30% 20% / 0.04), 0 8px 28px hsl(220 30% 20% / 0.07);
+  --page: hsl(210 30% 97.5%);
+  --ring-track: hsl(210 20% 91%);
+  --kcal: hsl(158 52% 42%);
+  --p: hsl(212 75% 58%);
+  --f: hsl(38 90% 56%);
+  --c: hsl(330 60% 62%);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: hsl(220 14% 10%);
+    --ring-track: hsl(220 10% 22%);
+    --soft-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 10px 30px hsl(0 0% 0% / 0.35);
+  }
+}
+
+html,
+body {
+  background: var(--page);
+}
+
+body {
+  min-height: 100vh;
+  padding-bottom: 110px;
+}
+
+.icon {
+  vertical-align: -0.125em;
+}
+
+.box,
+.card {
+  border: 0;
+  box-shadow: var(--soft-shadow);
+  border-radius: var(--bulma-radius-large);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--bulma-text-weak);
+}
+
+.btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--bulma-text-weak);
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.btn-quiet:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+}
+
+/* Top bar: on phones only the name and logout remain, links move to the tab bar. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.75rem 1.25rem;
+}
+
+.topbar-links {
+  display: none;
+  gap: 1.25rem;
+  margin-right: auto;
+}
+
+.topbar-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--bulma-text-weak);
+}
+
+.topbar a,
+.tabbar a {
+  color: var(--bulma-text-weak);
+}
+
+.topbar a[aria-current],
+.tabbar a[aria-current] {
+  color: var(--bulma-text-strong);
+  font-weight: 600;
+}
+
+.tabbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: flex;
+  justify-content: space-around;
+  background: color-mix(in srgb, var(--bulma-scheme-main) 85%, transparent);
+  backdrop-filter: blur(14px);
+  padding: 0.6rem 0 calc(0.6rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -1px 0 var(--bulma-border-weak);
+}
+
+.tabbar a {
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  font-size: 0.72rem;
+}
+
+.tabbar a .icon {
+  font-size: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .tabbar {
+    display: none;
+  }
+
+  .topbar-links {
+    display: flex;
+  }
+
+  body {
+    padding-bottom: 48px;
+  }
+}
+
+.page {
+  padding: 1rem 1.25rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+#toasts {
+  position: fixed;
+  z-index: 50;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 0.5rem;
+  width: min(92vw, 26rem);
+}
+
+@media (min-width: 1024px) {
+  #toasts {
+    bottom: 1.5rem;
+  }
+}
+
+.toast {
+  background: var(--bulma-scheme-main);
+  color: var(--bulma-text-strong);
+  box-shadow: var(--soft-shadow);
+  border-radius: var(--bulma-radius);
+  padding: 0.75rem 1rem;
+}
+
+.toast.is-error {
+  color: var(--bulma-danger);
+}
