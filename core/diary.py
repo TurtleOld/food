@@ -8,7 +8,9 @@ from typing import TypedDict
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
 
+from core.forms import DiaryEntrySheetForm
 from core.models import DailyTarget, DiaryEntry, Product
+from core.nutrition import NUTRITION_ROWS
 from core.undo import CannotUndo, Member, Restored, make_token, restorer
 
 
@@ -102,7 +104,7 @@ def kcal_from_macros(proteins: Decimal, fats: Decimal, carbs: Decimal) -> Decima
     return proteins * 4 + fats * 9 + carbs * 4
 
 
-class Slot(TypedDict):
+class MealRow(TypedDict):
     """Приём пищи ленты дня: заполненный или пустой."""
 
     type: str
@@ -127,13 +129,13 @@ class Ring:
     over: bool
 
 
-def meal_slots(meals: list[Meal]) -> list[Slot]:
+def meal_rows(meals: list[Meal]) -> list[MealRow]:
     """Дополняет заполненные Приёмы пищи пустыми до всех пяти в порядке `MealType`."""
     by_type = {meal["type"]: meal for meal in meals}
-    slots: list[Slot] = []
+    rows: list[MealRow] = []
     for meal_type, meal_label in DiaryEntry.MealType.choices:
         meal = by_type.get(meal_type)
-        slots.append(
+        rows.append(
             {
                 "type": meal_type,
                 "label": meal_label,
@@ -141,7 +143,7 @@ def meal_slots(meals: list[Meal]) -> list[Slot]:
                 "calories": meal["calories"] if meal else Decimal(0),
             }
         )
-    return slots
+    return rows
 
 
 def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
@@ -149,18 +151,14 @@ def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
     if progress is None:
         return []
     target = progress["target"]
-    specs = (
-        ("Ккал", "calories"),
-        ("Б", "proteins"),
-        ("Ж", "fats"),
-        ("У", "carbs"),
-    )
     result: list[Ring] = []
-    for label, key in specs:
+    for key, _dot, label in NUTRITION_ROWS:
         value: Decimal = totals[key]  # type: ignore[literal-required]
         goal: Decimal = getattr(target, key)
         pct = min(100, int(value / goal * 100)) if goal else 0
-        result.append(Ring(label=label, value=value, goal=goal, pct=pct, over=value > goal))
+        result.append(
+            Ring(label=label.capitalize(), value=value, goal=goal, pct=pct, over=value > goal)
+        )
     return result
 
 
@@ -243,6 +241,59 @@ def _restore_edited_entry(member: Member, payload: dict[str, str]) -> Restored:
     if not updated:
         raise CannotUndo
     return Restored(datetime.date.fromisoformat(payload["date"]))
+
+
+def parse_meal(value: str) -> str:
+    """Приём пищи из параметра запроса; пустая строка, если значение не из `MealType`."""
+    return value if value in DiaryEntry.MealType.values else ""
+
+
+def parse_hour(value: str) -> str:
+    """Час из параметра запроса как строка; пустая строка, если это не целое от 0 до 23."""
+    try:
+        hour = int(value)
+    except ValueError:
+        return ""
+    return str(hour) if 0 <= hour <= 23 else ""
+
+
+def initial_meal(meal: str, hour: str, now: datetime.datetime) -> str:
+    """Приём пищи по умолчанию: выбранный, иначе по часу клиента, иначе по часу сервера.
+
+    Args:
+        meal: уже проверенный `parse_meal` приём пищи или пустая строка.
+        hour: уже проверенный `parse_hour` час или пустая строка.
+        now: текущее время сервера, если клиент не прислал час.
+    """
+    if meal:
+        return meal
+    return meal_for_hour(int(hour) if hour else now.hour)
+
+
+def entry_added_text(entry: DiaryEntry) -> str:
+    """Текст тоста о добавленной записи: «Продукт, 100 г → Обед»."""
+    amount = f"{entry.amount:g} {entry.product.get_base_unit_display()}"
+    return f"{entry.product.name}, {amount} → {entry.get_meal_type_display()}"
+
+
+def draft_entry(product: Product, amount: object) -> DiaryEntry | None:
+    """Несохранённая запись для показа КБЖУ; `None`, если количество не проходит валидацию."""
+    form = DiaryEntrySheetForm(
+        {
+            "date": datetime.date.today(),
+            "meal_type": DiaryEntry.MealType.LUNCH,
+            "product": product.pk,
+            "amount": amount or "",
+        }
+    )
+    if not form.is_valid():
+        return None
+    entry = form.instance
+    entry.calories_snapshot = product.calories
+    entry.proteins_snapshot = product.proteins
+    entry.fats_snapshot = product.fats
+    entry.carbs_snapshot = product.carbs
+    return entry
 
 
 def meal_for_hour(hour: int) -> str:

@@ -6,16 +6,21 @@ from django.db import transaction
 
 from core.barcodes import normalize_barcode
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.nutrition import NUTRITION_FIELDS, NUTRITION_ROWS
 
-NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
+
+class DayField(forms.DateField):
+    """Дата дня в формате дд/мм/гггг; ISO остаётся допустимым для скриптов и тестов."""
+
+    input_formats = ["%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y"]
 
 
-NUTRITION_ROWS = [
-    ("calories", "kcal", "ккал"),
-    ("proteins", "p", "Б"),
-    ("fats", "f", "Ж"),
-    ("carbs", "c", "У"),
-]
+def day_widget() -> forms.DateInput:
+    """Текстовое поле дня: нативный `type=date` показывает дату по языку браузера."""
+    return forms.DateInput(
+        attrs={"inputmode": "numeric", "placeholder": "дд/мм/гггг", "autocomplete": "off"},
+        format="%d/%m/%Y",
+    )
 
 
 class ProductFieldsForm(forms.ModelForm):
@@ -23,6 +28,7 @@ class ProductFieldsForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs.setdefault("class", "input")
         for name in NUTRITION_FIELDS:
             self.fields[name].widget.attrs.update(
                 {"class": "input num", "step": "0.1", "min": "0", "inputmode": "decimal"}
@@ -32,7 +38,12 @@ class ProductFieldsForm(forms.ModelForm):
         required=False,
         label="Цифры штрихкода",
         widget=forms.TextInput(
-            attrs={"class": "input num", "inputmode": "numeric", "autocomplete": "off"}
+            attrs={
+                "class": "input num",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "8, 12 или 13 цифр",
+            }
         ),
     )
     transfer = forms.BooleanField(required=False)
@@ -69,6 +80,25 @@ class ProductFieldsForm(forms.ModelForm):
             if commit and code:
                 Barcode.objects.update_or_create(code=code, defaults={"product": product})
         return product
+
+    def draft_for_barcode_step(self) -> "ProductFieldsForm":
+        """Форма с введёнными значениями без ошибок валидации, кроме ошибок поля штрихкода.
+
+        Шаг «добавить код» не сохраняет Продукт, поэтому остальные поля не должны ругаться
+        на незаполненность. Вызывается на связанной форме после `full_clean()`.
+        """
+        initial = {
+            name: self.data[name]
+            for name in self.fields
+            if name in self.data and name not in ("barcode", "transfer")
+        }
+        draft = type(self)(initial=initial, instance=self.instance)
+        draft.full_clean()
+        draft.cleaned_data = {}
+        for error in self.errors.get("barcode", []):
+            draft.add_error("barcode", error)
+        draft.barcode_owner = self.barcode_owner
+        return draft
 
     @property
     def nutrition_rows(self) -> list[tuple[Any, str, str]]:
@@ -118,8 +148,9 @@ class DiaryEntryEditForm(DiaryEntryForm):
     class Meta:
         model = DiaryEntry
         fields = ["date", "meal_type", "amount"]
+        field_classes = {"date": DayField}
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "date": day_widget(),
             "meal_type": forms.RadioSelect,
         }
 
@@ -153,8 +184,9 @@ class DiaryEntrySheetForm(DiaryEntryForm):
     class Meta:
         model = DiaryEntry
         fields = ["date", "meal_type", "product", "amount"]
+        field_classes = {"date": DayField}
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "date": day_widget(),
             "meal_type": forms.RadioSelect,
             "product": forms.HiddenInput,
         }

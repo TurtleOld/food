@@ -48,6 +48,17 @@ document.addEventListener("alpine:init", () => {
         return this.cam === "asking" || this.cam === "live";
       },
 
+      // Только привязка кода: форму целиком не отправляем, шторка остаётся открытой.
+      addCode() {
+        const form = this.$root.closest("form");
+        htmx.ajax("POST", form.getAttribute("hx-post"), {
+          source: form,
+          target: "#sheet-body",
+          swap: "innerHTML",
+          values: { add_barcode: "1" },
+        });
+      },
+
       toggle() {
         if (this.stripOpen || this.cam !== "off") this.stop();
         else this.start();

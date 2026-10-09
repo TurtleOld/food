@@ -53,7 +53,7 @@ class SheetEntryPointTests(SheetAddBase):
         response = self.client.get(reverse("core:day"))
 
         self.assertContains(response, f'hx-get="{self.create_url}"')
-        self.assertContains(response, 'hx-vals=\'{"meal": "dinner"}\'')
+        self.assertContains(response, 'hx-vals="{&quot;meal&quot;: &quot;dinner&quot;}"')
 
     def test_without_htmx_the_create_url_is_still_the_plain_page(self):
         response = self.client.get(self.create_url)
@@ -179,6 +179,13 @@ class SheetAmountStepTests(SheetAddBase):
 
         self.assertContains(response, 'value="100"')
         self.assertContains(response, "Добавить в")
+
+    def test_submit_button_label_is_one_text_node(self):
+        response = self.client.get(
+            self.create_url, {"product": self.chicken.pk, "meal": "lunch"}, headers=HTMX
+        )
+
+        self.assertContains(response, ">Добавить в обед</span></button>")
 
     def test_unknown_product_is_not_found(self):
         response = self.client.get(self.create_url, {"product": 9999}, headers=HTMX)

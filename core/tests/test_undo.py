@@ -166,3 +166,89 @@ class UndoTests(TestCase):
 
         self.assertContains(response, f'hx-post="{self.delete_url}"')
         self.assertContains(response, "Удалить запись")
+
+    def current_day(self, day):
+        return {**HTMX, "HX-Current-URL": f"http://testserver/day/{day.isoformat()}/"}
+
+    def test_undo_of_edit_that_moved_the_day_renders_the_day_on_the_page(self):
+        tomorrow = self.today + datetime.timedelta(days=1)
+        response = self.client.post(
+            reverse("core:entry_edit", args=[self.entry.pk]),
+            {"date": tomorrow, "meal_type": "dinner", "amount": "250"},
+            headers=HTMX,
+        )
+        DiaryEntry.objects.create(
+            member=self.member,
+            date=tomorrow,
+            meal_type=DiaryEntry.MealType.DINNER,
+            product=Product.objects.create(
+                name="Гречка",
+                base_unit=Product.BaseUnit.GRAM,
+                calories=Decimal("110.0"),
+                proteins=Decimal("4.0"),
+                fats=Decimal("1.0"),
+                carbs=Decimal("20.0"),
+                author=self.member,
+            ),
+            amount=Decimal("50"),
+        )
+
+        undone = self.client.post(
+            self.undo_url, {"token": token_of(response)}, headers=self.current_day(tomorrow)
+        )
+
+        self.assertContains(undone, "Гречка")
+        self.assertNotContains(undone, "Курица")
+
+    def test_undo_outside_a_day_page_falls_back_to_the_restored_day(self):
+        token = token_of(self.delete_via_sheet())
+
+        undone = self.client.post(
+            self.undo_url,
+            {"token": token},
+            headers={**HTMX, "HX-Current-URL": "http://testserver/products/"},
+        )
+
+        self.assertContains(undone, "Курица")
+
+    def test_undo_on_the_today_page_renders_today(self):
+        token = token_of(self.delete_via_sheet())
+
+        undone = self.client.post(
+            self.undo_url,
+            {"token": token},
+            headers={**HTMX, "HX-Current-URL": "http://testserver/"},
+        )
+
+        self.assertContains(undone, "Курица")
+
+    def test_plain_edit_without_htmx_offers_no_undo(self):
+        response = self.client.post(
+            reverse("core:entry_edit", args=[self.entry.pk]),
+            {"date": self.today, "meal_type": "dinner", "amount": "250"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Запись обновлена")
+        self.assertNotContains(response, 'name="token"')
+
+    def test_undo_of_product_deletion_with_deleted_author_is_refused_not_500(self):
+        bob = User.objects.create_user(username="bob", password="s3cret-pass")
+        product = Product.objects.create(
+            name="Тофу",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("76.0"),
+            proteins=Decimal("8.0"),
+            fats=Decimal("4.0"),
+            carbs=Decimal("2.0"),
+            author=bob,
+        )
+        token = token_of(
+            self.client.post(reverse("core:product_delete", args=[product.pk]), headers=HTMX)
+        )
+        bob.delete()
+
+        undone = self.client.post(self.undo_url, {"token": token}, headers=HTMX)
+
+        self.assertContains(undone, "Уже нельзя вернуть")
+        self.assertFalse(Product.objects.filter(name="Тофу").exists())

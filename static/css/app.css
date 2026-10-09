@@ -249,13 +249,21 @@ body {
   text-align: center;
 }
 
-.datebar input[type="date"] {
+.datebar .date-pick {
   border: 0;
   background: none;
   color: var(--bulma-text-weak);
   font: inherit;
   font-size: 0.85rem;
-  text-align: center;
+  cursor: pointer;
+}
+
+.datebar .date-native {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .summary {
@@ -342,12 +350,12 @@ body {
   border-radius: 1px;
 }
 
-.slot {
+.meal-row {
   position: relative;
   margin-bottom: 1.5rem;
 }
 
-.slot > .node {
+.meal-row > .node {
   position: absolute;
   left: -1.95rem;
   top: 1.85rem;
@@ -358,7 +366,7 @@ body {
   box-shadow: 0 0 0 5px var(--page);
 }
 
-.slot.is-empty > .node {
+.meal-row.is-empty > .node {
   background: var(--bulma-border);
   top: 0.95rem;
 }
@@ -389,13 +397,13 @@ body {
   font-weight: 600;
 }
 
-.add-slot {
+.add-meal {
   display: block;
   padding: 0.6rem 0;
   color: var(--bulma-text-weak);
 }
 
-.add-slot:hover {
+.add-meal:hover {
   color: var(--bulma-text-strong);
 }
 
@@ -671,10 +679,12 @@ body:has(.login) {
   color: var(--bulma-text-strong);
 }
 
+.entry-kcal {
+  white-space: nowrap;
+}
+
 .entry-kcal small {
-  display: block;
   font-weight: 400;
-  text-align: right;
 }
 
 /* Scanner: slim camera strip above the result list; refusal rows sit under the field. */
@@ -747,4 +757,47 @@ body:has(.login) {
   all: unset;
   cursor: pointer;
   text-decoration: underline;
+}
+
+/* The close button floats over the sheet's top-right corner, so long titles keep clear of it. */
+.sheet .title {
+  padding-right: 2.5rem;
+  overflow-wrap: anywhere;
+}
+
+/* Quick-amount chips replace the spinner arrows, which nobody uses on a phone. */
+.amount-input,
+.nutrition-fields input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.amount-input::-webkit-inner-spin-button,
+.amount-input::-webkit-outer-spin-button,
+.nutrition-fields input[type="number"]::-webkit-inner-spin-button,
+.nutrition-fields input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.field-day input {
+  border: 0;
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light dark;
+}
+
+.field-day input:focus {
+  outline: 2px solid var(--bulma-primary);
+  outline-offset: 1px;
+}
+
+/* Bulma's .delete paints its own cross; the chip needs room so it does not sit on the code. */
+.chip .delete {
+  margin-left: 0.4rem;
+  flex: none;
 }
