@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import hashlib
 import json
 from typing import Any
 from urllib.parse import urlencode
@@ -62,6 +61,7 @@ from core.htmx import (
 )
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
 from core.off import OffLookup, Outcome, lookup
+from core.pwa import cache_name, precache_urls
 from core.undo import add_undo_message, restore
 
 QUICK_AMOUNTS = (50, 100, 150, 200)
@@ -570,21 +570,6 @@ class HealthzView(View):
         return HttpResponse("ok")
 
 
-PRECACHE_STATIC_FILES = (
-    "vendor/htmx/htmx-2.0.11.min.js",
-    "vendor/alpine/alpine-3.17.4.min.js",
-    "vendor/bulma/bulma-1.0.4.min.css",
-    "css/app.css",
-    "manifest.webmanifest",
-    "icons/icon-192.png",
-    "icons/icon-512.png",
-    "icons/icon-maskable-512.png",
-    "icons/apple-touch-icon.png",
-    "icons/favicon.svg",
-    "offline.html",
-)
-
-
 class ServiceWorkerView(View):
     """Отдаёт service worker с корня origin, чтобы его scope покрывал всё приложение.
 
@@ -594,14 +579,13 @@ class ServiceWorkerView(View):
     """
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        precache_urls = [static(name) for name in PRECACHE_STATIC_FILES]
-        cache_hash = hashlib.sha256("\n".join(precache_urls).encode()).hexdigest()[:12]
+        urls = precache_urls()
         response = render(
             request,
             "service-worker.js",
             {
-                "precache_json": json.dumps(precache_urls),
-                "cache_name": f"food-static-{cache_hash}",
+                "precache_json": json.dumps(urls),
+                "cache_name": cache_name(urls),
                 "offline_url": static("offline.html"),
                 "static_prefix": static(""),
                 "bypass_cache": settings.DEBUG,
