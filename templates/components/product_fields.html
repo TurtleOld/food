@@ -13,6 +13,8 @@
   </div>
   <p class="muted is-size-7 mt-1">граммы / миллилитры</p>
   {% for error in form.base_unit.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+{% elif product %}
+  <p class="muted is-size-7 mt-2">{% include "components/icons/lock.html" %} в {% if product.base_unit == "g" %}граммах{% else %}миллилитрах{% endif %} — единица не меняется после создания</p>
 {% endif %}
 
 <p class="muted is-size-7 mt-4 mb-2">На 100 г / мл</p>
