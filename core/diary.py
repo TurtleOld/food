@@ -94,3 +94,65 @@ def day_summary(member: AbstractBaseUser | AnonymousUser, date: datetime.date) -
             "carbs": totals["carbs"] - target.carbs,
         }
     return DaySummary(meals=meals, totals=totals, progress=progress)
+
+
+class Slot(TypedDict):
+    """Приём пищи ленты дня: заполненный или пустой."""
+
+    type: str
+    label: str
+    entries: list[DiaryEntry]
+    calories: Decimal
+
+
+@dataclass(frozen=True)
+class Ring:
+    """Кольцо прогресса: значение дня против цели.
+
+    Attributes:
+        pct: заполнение кольца, 0-100.
+        over: значение превысило цель.
+    """
+
+    label: str
+    value: Decimal
+    goal: Decimal
+    pct: int
+    over: bool
+
+
+def meal_slots(meals: list[Meal]) -> list[Slot]:
+    """Дополняет заполненные Приёмы пищи пустыми до всех пяти в порядке `MealType`."""
+    by_type = {meal["type"]: meal for meal in meals}
+    slots: list[Slot] = []
+    for meal_type, meal_label in DiaryEntry.MealType.choices:
+        meal = by_type.get(meal_type)
+        slots.append(
+            {
+                "type": meal_type,
+                "label": meal_label,
+                "entries": meal["entries"] if meal else [],
+                "calories": meal["calories"] if meal else Decimal(0),
+            }
+        )
+    return slots
+
+
+def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
+    """Строит кольца ккал, Б, Ж, У в этом порядке; без Суточной цели колец нет."""
+    if progress is None:
+        return []
+    target = progress["target"]
+    specs = (
+        ("Ккал", "calories"),
+        ("Б", "proteins"),
+        ("Ж", "fats"),
+        ("У", "carbs"),
+    )
+    result: list[Ring] = []
+    for label, key in specs:
+        value: Decimal = totals[key]  # type: ignore[literal-required]
+        goal: Decimal = getattr(target, key)
+        pct = min(100, int(value / goal * 100)) if goal else 0
+        result.append(Ring(label=label, value=value, goal=goal, pct=pct, over=value > goal))
+    return result

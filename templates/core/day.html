@@ -2,93 +2,77 @@
 {% load nutrition %}
 
 {% block content %}
-  <h1>Дневник — {{ user.username }}</h1>
-
-  <nav>
-    <a href="{% url 'core:day_on' previous_date.isoformat %}">← Предыдущий день</a>
-    <span>{{ current_date|date:"d.m.Y" }}</span>
-    <a href="{% url 'core:day_on' next_date.isoformat %}">Следующий день →</a>
-  </nav>
-
-  {% if meals %}
-    {% for meal in meals %}
-      <section>
-        <h2>{{ meal.label }}</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Продукт</th>
-              <th>Количество</th>
-              <th>Ккал</th>
-              <th>Белки</th>
-              <th>Жиры</th>
-              <th>Углеводы</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for entry in meal.entries %}
-              <tr>
-                <td>{{ entry.product.name }}</td>
-                <td>{{ entry.amount }} {{ entry.product.get_base_unit_display }}</td>
-                <td>{{ entry.calories|whole }}</td>
-                <td>{{ entry.proteins|one_decimal }}</td>
-                <td>{{ entry.fats|one_decimal }}</td>
-                <td>{{ entry.carbs|one_decimal }}</td>
-                <td>
-                  <a href="{% url 'core:entry_edit' entry.pk %}">Править</a>
-                  <a href="{% url 'core:entry_delete' entry.pk %}">Удалить</a>
-                </td>
-              </tr>
+  <div class="day-layout">
+    <div class="datebar">
+      <a class="btn-quiet" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день">‹</a>
+      <div class="day">
+        <div class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}</div>
+        <input type="date" value="{{ current_date.isoformat }}" aria-label="Дата"
+               onchange="if (this.value) location.href = '{% url 'core:day_on' '0000-00-00' %}'.replace('0000-00-00', this.value)">
+      </div>
+      <a class="btn-quiet" href="{% url 'core:day_on' next_date.isoformat %}" aria-label="Следующий день">›</a>
+    </div>
+  {% partialdef feed inline %}
+  <div id="feed" class="feed-block">
+    <div class="summary-col">
+      <div class="box summary has-text-centered">
+        {% if rings %}
+          {% with kcal=rings.0 %}
+            {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}
+            <p class="mt-4 muted">
+              {% if kcal.over %}Сверх цели на <b class="has-text-danger">{{ kcal.value|sub:kcal.goal|whole }}</b> ккал{% else %}Осталось <b>{{ kcal.goal|sub:kcal.value|whole }}</b> ккал{% endif %}
+            </p>
+          {% endwith %}
+          <div class="macros">
+            {% for ring in rings|slice:"1:" %}
+              <div class="item">
+                {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
+                {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
+                <span class="is-size-7 muted">{{ ring.label }} · {{ ring.goal|whole }} г</span>
+              </div>
             {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td>Итого</td>
-              <td></td>
-              <td>{{ meal.calories|whole }}</td>
-              <td>{{ meal.proteins|one_decimal }}</td>
-              <td>{{ meal.fats|one_decimal }}</td>
-              <td>{{ meal.carbs|one_decimal }}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </section>
-    {% endfor %}
-    <section>
-      <h2>Итого за день</h2>
-      <p>
-        {{ totals.calories|whole }} ккал ·
-        Б {{ totals.proteins|one_decimal }} ·
-        Ж {{ totals.fats|one_decimal }} ·
-        У {{ totals.carbs|one_decimal }}
-      </p>
-    </section>
-  {% else %}
-    <p>Записей пока нет</p>
-  {% endif %}
+          </div>
+          <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
+        {% else %}
+          <p class="muted">Цель не задана</p>
+          <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+        {% endif %}
+      </div>
+    </div>
 
-  <section>
-    <h2>Суточная цель</h2>
-    {% if progress %}
-      <p>
-        Цель: {{ progress.target.calories|whole }} ккал ·
-        Б {{ progress.target.proteins|one_decimal }} ·
-        Ж {{ progress.target.fats|one_decimal }} ·
-        У {{ progress.target.carbs|one_decimal }}
-      </p>
-      <p>
-        Отклонение: {{ progress.calories|whole }} ккал ·
-        Б {{ progress.proteins|one_decimal }} ·
-        Ж {{ progress.fats|one_decimal }} ·
-        У {{ progress.carbs|one_decimal }}
-      </p>
-    {% else %}
-      <p>Цель не задана</p>
-    {% endif %}
-    <p><a href="{% url 'core:daily_target_edit' %}">{% if progress %}Изменить цель{% else %}Задать цель{% endif %}</a></p>
-  </section>
-
-  <p><a href="{% url 'core:entry_create' current_date.isoformat %}">Добавить запись</a></p>
+    <div class="feed-col">
+      <div class="quick-add">
+        <a class="quick-add-prompt" href="{% url 'core:entry_create' current_date.isoformat %}">Что съели?</a>
+        <a class="btn-quiet" href="{% url 'core:entry_create' current_date.isoformat %}" aria-label="Сканер штрихкода">{% include "components/icons/barcode.html" %}</a>
+      </div>
+      <div class="timeline">
+        {% for slot in slots %}
+          <div class="slot{% if not slot.entries %} is-empty{% endif %}">
+            <span class="node"></span>
+            {% if slot.entries %}
+              <div class="box">
+                <div class="level is-mobile mb-1">
+                  <h2 class="title is-5 mb-0">{{ slot.label }}</h2>
+                  <span class="muted num">{{ slot.calories|whole }} ккал</span>
+                </div>
+                {% for entry in slot.entries %}
+                  <a class="entry" href="{% url 'core:entry_edit' entry.pk %}">
+                    <span>
+                      <span class="entry-name">{{ entry.product.name }}</span>
+                      <span class="entry-detail is-size-7 muted">{{ entry.amount }} {{ entry.product.get_base_unit_display }} · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
+                    </span>
+                    <span class="entry-kcal num">{{ entry.calories|whole }}</span>
+                  </a>
+                {% endfor %}
+              </div>
+            {% else %}
+              <a class="add-slot" href="{% url 'core:entry_create' current_date.isoformat %}"><span class="has-text-weight-medium">{{ slot.label }}</span> <span class="muted">· добавить</span></a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endpartialdef %}
+  </div>
 {% endblock %}
