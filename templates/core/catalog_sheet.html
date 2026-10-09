@@ -1,0 +1,20 @@
+{% load nutrition %}
+{% comment %}Продукт Каталога в шторке: новый или правка. Страницы нет — только фрагмент.{% endcomment %}
+<form id="product-form" class="sheet-form" method="post" action="{{ request.path }}" data-guard
+      hx-post="{{ request.path }}" hx-target="#sheet-body" hx-swap="innerHTML">
+  {% csrf_token %}
+  <h2 class="title is-4 mb-3">{% if product %}Продукт{% else %}Новый продукт{% endif %}</h2>
+  {{ form.non_field_errors }}
+  {% include "components/product_fields.html" %}
+  <button class="button is-primary is-fullwidth mt-5" type="submit">{% if product %}Сохранить{% else %}Добавить в каталог{% endif %}</button>
+</form>
+{% if product %}
+  <p class="muted is-size-7 mt-4 has-text-centered">Добавил(а) {{ product.author.username }} · в {{ usage }} {{ usage|plural:"записи,записях,записях" }} дневника</p>
+  <p class="mt-2 has-text-centered">
+    {% if usage %}
+      <span class="muted is-size-7">Удалить нельзя — продукт есть в записях дневника</span>
+    {% else %}
+      <a class="has-text-danger" href="{% url 'core:product_delete' product.pk %}" hx-post="{% url 'core:product_delete' product.pk %}">Удалить продукт</a>
+    {% endif %}
+  </p>
+{% endif %}

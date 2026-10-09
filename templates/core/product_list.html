@@ -1,48 +1,47 @@
 {% extends "base.html" %}
+{% load nutrition %}
 
 {% block content %}
-  <h1>Каталог продуктов</h1>
+  <div class="catalog" x-data="sheetHost" @keydown.escape.window="closeSheet()" @sheet:close.window="closeSheet(true)">
+    <h1 class="title is-3 mb-4">Продукты</h1>
 
-  <form method="get">
-    <input type="text" name="q" value="{{ query }}" placeholder="Поиск по названию">
-    <button type="submit">Найти</button>
-  </form>
+    <form class="findbar" method="get" action="{% url 'core:product_list' %}"
+          hx-get="{% url 'core:product_list' %}" hx-trigger="input delay:250ms, submit" hx-target="#catalog" hx-swap="outerHTML">
+      {% include "components/icons/search.html" %}
+      <input type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Найти продукт" aria-label="Поиск продукта">
+      <a class="btn-quiet" href="{% url 'core:product_create' %}"
+         hx-get="{% url 'core:product_create' %}" hx-trigger="click" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">+ Новый</a>
+    </form>
 
-  <p><a href="{% url 'core:product_create' %}">Добавить продукт</a></p>
+    {% partialdef catalog inline %}
+    <div id="catalog" hx-get="{% url 'core:product_list' %}" hx-trigger="catalog:changed from:body"
+         hx-include=".findbar" hx-target="this" hx-swap="outerHTML">
+      <p class="muted mb-3">{{ total }} {{ total|plural:"продукт,продукта,продуктов" }}</p>
+      {% if products %}
+        <div class="box">
+          {% for product in products %}
+            <a class="entry" href="{% url 'core:product_edit' product.pk %}"
+               hx-get="{% url 'core:product_edit' product.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">
+              <span>
+                <span class="entry-name">{{ product.name }}</span>
+                <span class="entry-detail is-size-7 muted num">Б {{ product.proteins|one_decimal }} · Ж {{ product.fats|one_decimal }} · У {{ product.carbs|one_decimal }}</span>
+              </span>
+              <span class="entry-kcal num">{{ product.calories|whole }} <small class="muted">ккал / 100 {{ product.get_base_unit_display }}</small></span>
+            </a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted has-text-centered py-5">Ничего не нашлось</p>
+      {% endif %}
+      {% if query and not query.isdigit %}
+        <p class="has-text-centered">
+          <a class="btn-quiet" href="{% url 'core:product_create' %}?name={{ query|urlencode }}"
+             hx-get="{% url 'core:product_create' %}?name={{ query|urlencode }}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">+ Новый продукт «{{ query }}»</a>
+        </p>
+      {% endif %}
+    </div>
+    {% endpartialdef %}
 
-  {% if products %}
-    <table>
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Единица</th>
-          <th>Ккал</th>
-          <th>Белки</th>
-          <th>Жиры</th>
-          <th>Углеводы</th>
-          <th>Автор</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for product in products %}
-          <tr>
-            <td>{{ product.name }}</td>
-            <td>{{ product.get_base_unit_display }}</td>
-            <td>{{ product.calories }}</td>
-            <td>{{ product.proteins }}</td>
-            <td>{{ product.fats }}</td>
-            <td>{{ product.carbs }}</td>
-            <td>{{ product.author.username }}</td>
-            <td>
-              <a href="{% url 'core:product_edit' product.pk %}">Править</a>
-              <a href="{% url 'core:product_delete' product.pk %}">Удалить</a>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p>Продукты не найдены</p>
-  {% endif %}
+    {% include "components/sheet.html" with label="Продукт" %}
+  </div>
 {% endblock %}

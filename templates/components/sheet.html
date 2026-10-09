@@ -1,0 +1,6 @@
+{% comment %}Шторка: снизу на телефоне, модалка на десктопе. Хозяин страницы — `x-data="sheetHost"` (static/js/sheet.js). Контекст: `label`.{% endcomment %}
+<div class="sheet-backdrop" x-show="sheetOpen" x-cloak @click="closeSheet()"></div>
+<aside class="sheet" x-show="sheetOpen" x-cloak role="dialog" aria-modal="true" aria-label="{{ label }}">
+  <button type="button" class="btn-quiet sheet-close" @click="closeSheet()" aria-label="Закрыть">{% include "components/icons/x.html" %}</button>
+  <div id="sheet-body" @input="if ($event.target.closest('[data-guard]')) dirty = true"></div>
+</aside>
