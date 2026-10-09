@@ -20,6 +20,7 @@ CACHE_SECONDS = 600
 APP_VERSION = "0.1"
 
 _UNITS = {"100g": "g", "100ml": "ml"}
+_QUANTITY_UNITS = {"g": "g", "kg": "g", "ml": "ml", "cl": "ml", "l": "ml"}
 
 
 class Outcome(Enum):
@@ -34,6 +35,8 @@ class OffLookup:
 
     У `FOUND` заполнены `name`, `url` и разобранные значения на 100 г / мл; отсутствующее
     значение — `None`. `base_unit` — `g`/`ml` или `None`, если OFF не сказал, на что КБЖУ.
+    `unit_hint` — `g`/`ml` по единице количества упаковки, только когда `base_unit` не ясен:
+    это подсказка для человека, а не предвыбор.
     """
 
     outcome: Outcome
@@ -44,6 +47,7 @@ class OffLookup:
     fats: Decimal | None = None
     carbs: Decimal | None = None
     url: str = ""
+    unit_hint: str | None = None
 
     @property
     def found(self) -> bool:
@@ -95,10 +99,15 @@ def _parse(code: str, product: dict[str, Any]) -> OffLookup:
         nutriments = {}
     # `energy_100g` в кДж, поэтому ккал берутся только из `energy-kcal_100g`.
     fats = nutriments.get("fat_100g", nutriments.get("fats_100g"))
+    base_unit = _UNITS.get(str(product.get("nutrition_data_per")))
+    unit_hint = (
+        None if base_unit else _QUANTITY_UNITS.get(str(product.get("product_quantity_unit")))
+    )
     return OffLookup(
         outcome=Outcome.FOUND,
         name=_name(product),
-        base_unit=_UNITS.get(str(product.get("nutrition_data_per"))),
+        base_unit=base_unit,
+        unit_hint=unit_hint,
         calories=_decimal(nutriments.get("energy-kcal_100g")),
         proteins=_decimal(nutriments.get("proteins_100g")),
         fats=_decimal(fats),

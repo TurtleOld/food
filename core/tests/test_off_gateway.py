@@ -225,6 +225,21 @@ class OffFormTests(OffBase):
         self.assertNotRegex(response.content.decode(), r'value="(g|ml)"[^>]*checked')
         self.assertContains(response, "Укажите, на сколько")
 
+    def test_quantity_unit_is_only_a_hint_when_the_basis_is_unclear(self):
+        data = full_product(nutrition_data_per="serving", product_quantity_unit="ml")
+        with mock.patch(URLOPEN, return_value=FakeResponse(data)):
+            response = self.form()
+
+        self.assertContains(response, "в Open Food Facts объём указан в мл")
+        self.assertNotRegex(response.content.decode(), r'value="(g|ml)"[^>]*checked')
+
+    def test_quantity_unit_is_not_mentioned_when_the_basis_is_clear(self):
+        data = full_product(nutrition_data_per="100ml", product_quantity_unit="ml")
+        with mock.patch(URLOPEN, return_value=FakeResponse(data)):
+            response = self.form()
+
+        self.assertNotContains(response, "в Open Food Facts объём указан")
+
     def test_gram_product_selects_grams(self):
         data = full_product(nutrition_data_per="100g")
         with mock.patch(URLOPEN, return_value=FakeResponse(data)):
