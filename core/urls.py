@@ -9,6 +9,12 @@ urlpatterns = [
     path("", views.DayView.as_view(), name="day"),
     path("day/<str:date>/", views.DayView.as_view(), name="day_on"),
     path("day/<str:date>/entries/new/", views.EntryCreateView.as_view(), name="entry_create"),
+    path("day/<str:date>/entries/search/", views.EntrySearchView.as_view(), name="entry_search"),
+    path(
+        "day/<str:date>/entries/new/preview/",
+        views.EntryDraftPreviewView.as_view(),
+        name="entry_draft_preview",
+    ),
     path("entries/<int:pk>/edit/", views.EntryUpdateView.as_view(), name="entry_edit"),
     path("entries/<int:pk>/preview/", views.EntryPreviewView.as_view(), name="entry_preview"),
     path("entries/<int:pk>/delete/", views.EntryDeleteView.as_view(), name="entry_delete"),

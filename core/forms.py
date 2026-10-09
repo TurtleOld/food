@@ -76,3 +76,20 @@ class DailyTargetForm(forms.ModelForm):
             if value is not None and value <= 0:
                 self.add_error(field, "Значение должно быть больше нуля")
         return cleaned_data
+
+
+class DiaryEntrySheetForm(DiaryEntryForm):
+    """Шаг количества шторки: продукт задан заранее, дата и приём правятся на шаге."""
+
+    class Meta:
+        model = DiaryEntry
+        fields = ["date", "meal_type", "product", "amount"]
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "meal_type": forms.RadioSelect,
+            "product": forms.HiddenInput,
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
