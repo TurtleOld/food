@@ -2,8 +2,10 @@ from decimal import Decimal
 from typing import Any, cast
 
 from django import forms
+from django.db import transaction
 
-from core.models import DailyTarget, DiaryEntry, Product
+from core.barcodes import normalize_barcode
+from core.models import Barcode, DailyTarget, DiaryEntry, Product
 
 NUTRITION_FIELDS = ["calories", "proteins", "fats", "carbs"]
 
@@ -25,6 +27,48 @@ class ProductFieldsForm(forms.ModelForm):
             self.fields[name].widget.attrs.update(
                 {"class": "input num", "step": "0.1", "min": "0", "inputmode": "decimal"}
             )
+
+    barcode = forms.CharField(
+        required=False,
+        label="Цифры штрихкода",
+        widget=forms.TextInput(
+            attrs={"class": "input num", "inputmode": "numeric", "autocomplete": "off"}
+        ),
+    )
+    transfer = forms.BooleanField(required=False)
+    barcode_owner: Product | None = None
+
+    def clean_barcode(self) -> str:
+        raw = self.cleaned_data["barcode"]
+        if not raw.strip():
+            return ""
+        code = normalize_barcode(raw)
+        if code is None:
+            raise forms.ValidationError(
+                "Неверный штрихкод: нужно 8, 12 или 13 цифр и верная контрольная цифра"
+            )
+        return code
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            return cleaned_data
+        code = cleaned_data.get("barcode")
+        if code and not cleaned_data.get("transfer"):
+            owner = Product.objects.filter(barcodes__code=code).exclude(pk=self.instance.pk).first()
+            if owner is not None:
+                self.barcode_owner = owner
+                self.add_error("barcode", f"Код уже у «{owner.name}»")
+        return cleaned_data
+
+    def save(self, commit: bool = True) -> Product:
+        # Код привязывается вместе с Продуктом, поэтому только при commit=True.
+        with transaction.atomic():
+            product = super().save(commit=commit)
+            code = self.cleaned_data.get("barcode")
+            if commit and code:
+                Barcode.objects.update_or_create(code=code, defaults={"product": product})
+        return product
 
     @property
     def nutrition_rows(self) -> list[tuple[Any, str, str]]:

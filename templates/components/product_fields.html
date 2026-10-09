@@ -27,3 +27,17 @@
     </div>
   {% endfor %}
 </div>
+
+<div class="field mt-4">
+  <label class="label" for="{{ form.barcode.id_for_label }}">{{ form.barcode.label }}</label>
+  {% if product %}{% include "components/barcode_chips.html" %}{% endif %}
+  <div class="barcode-input is-flex" style="gap: .5rem">
+    {{ form.barcode }}
+    {# Сканер камерой появится в тикете «Сканер камерой и фото». #}
+    <button class="button" type="button" disabled title="Скоро" aria-label="Сканер">{% include "components/icons/scan.html" %}</button>
+  </div>
+  {% for error in form.barcode.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+  {% if form.barcode_owner %}
+    <button class="button is-small mt-2" type="submit" name="transfer" value="1">Перенести сюда</button>
+  {% endif %}
+</div>
