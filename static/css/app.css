@@ -226,6 +226,7 @@ body {
   height: 0.6rem;
   border-radius: 50%;
   margin-right: 0.5rem;
+}
 
 /* Login: full-bleed halves, so the page container and tab-bar padding are dropped. */
 .page.is-bare {
@@ -307,6 +308,8 @@ body:has(.login) {
 @media (min-width: 900px) {
   .login {
     grid-template-columns: 1.1fr 1fr;
+  }
+}
 
 /* Day page */
 .day-layout {
