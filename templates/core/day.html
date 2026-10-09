@@ -7,7 +7,8 @@
       <a class="btn-quiet" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день">‹</a>
       <div class="day">
         <div class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}</div>
-        <input type="date" value="{{ current_date.isoformat }}" aria-label="Дата"
+        <button type="button" class="date-pick" x-data @click="$refs.picker.showPicker()">{{ current_date|date:"d/m/Y" }}</button>
+        <input x-ref="picker" class="date-native" type="date" value="{{ current_date.isoformat }}" aria-label="Дата" tabindex="-1"
                onchange="if (this.value) location.href = '{% url 'core:day_on' '0000-00-00' %}'.replace('0000-00-00', this.value)">
       </div>
       <a class="btn-quiet" href="{% url 'core:day_on' next_date.isoformat %}" aria-label="Следующий день">›</a>

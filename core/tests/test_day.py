@@ -153,7 +153,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, 'type="date" value="2026-03-10"')
+        self.assertContains(response, "10/03/2026")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
 

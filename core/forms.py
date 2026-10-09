@@ -9,6 +9,20 @@ from core.models import Barcode, DailyTarget, DiaryEntry, Product
 from core.nutrition import NUTRITION_FIELDS, NUTRITION_ROWS
 
 
+class DayField(forms.DateField):
+    """Дата дня в формате дд/мм/гггг; ISO остаётся допустимым для скриптов и тестов."""
+
+    input_formats = ["%d/%m/%Y", "%Y-%m-%d", "%d.%m.%Y"]
+
+
+def day_widget() -> forms.DateInput:
+    """Текстовое поле дня: нативный `type=date` показывает дату по языку браузера."""
+    return forms.DateInput(
+        attrs={"inputmode": "numeric", "placeholder": "дд/мм/гггг", "autocomplete": "off"},
+        format="%d/%m/%Y",
+    )
+
+
 class ProductFieldsForm(forms.ModelForm):
     """Основа форм Продукта: поля КБЖУ для общего компонента `components/product_fields.html`."""
 
@@ -134,8 +148,9 @@ class DiaryEntryEditForm(DiaryEntryForm):
     class Meta:
         model = DiaryEntry
         fields = ["date", "meal_type", "amount"]
+        field_classes = {"date": DayField}
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "date": day_widget(),
             "meal_type": forms.RadioSelect,
         }
 
@@ -169,8 +184,9 @@ class DiaryEntrySheetForm(DiaryEntryForm):
     class Meta:
         model = DiaryEntry
         fields = ["date", "meal_type", "product", "amount"]
+        field_classes = {"date": DayField}
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "date": day_widget(),
             "meal_type": forms.RadioSelect,
             "product": forms.HiddenInput,
         }

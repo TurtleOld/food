@@ -332,13 +332,21 @@ body:has(.login) {
   text-align: center;
 }
 
-.datebar input[type="date"] {
+.datebar .date-pick {
   border: 0;
   background: none;
   color: var(--bulma-text-weak);
   font: inherit;
   font-size: 0.85rem;
-  text-align: center;
+  cursor: pointer;
+}
+
+.datebar .date-native {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .summary {
@@ -772,7 +780,7 @@ body:has(.login) {
   margin: 0;
 }
 
-.field-day input[type="date"] {
+.field-day input {
   border: 0;
   background: var(--bulma-background);
   color: var(--bulma-text-strong);
@@ -783,7 +791,7 @@ body:has(.login) {
   color-scheme: light dark;
 }
 
-.field-day input[type="date"]:focus {
+.field-day input:focus {
   outline: 2px solid var(--bulma-primary);
   outline-offset: 1px;
 }
