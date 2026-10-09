@@ -17,7 +17,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
-from django.urls import reverse, reverse_lazy
+from django.urls import Resolver404, resolve, reverse, reverse_lazy
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -391,10 +391,11 @@ class EntryUpdateView(OwnEntryMixin, FragmentMixin, UpdateView):
         return entry
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
-        add_undo_message(self.request, "Запись обновлена", self.undo_token)
-        response = super().form_valid(form)
         if not self.request.htmx:  # type: ignore[attr-defined]
-            return response
+            messages.success(self.request, "Запись обновлена")
+            return super().form_valid(form)
+        add_undo_message(self.request, "Запись обновлена", self.undo_token)
+        super().form_valid(form)
         context = _day_context(self.request.user, self.opened_from_date)
         return sheet_saved_response(self.request, "core/day.html#feed", context, "#feed")
 
@@ -461,6 +462,25 @@ class EntryDeleteView(OwnEntryMixin, DeleteView):
         return context
 
 
+def _shown_day(request: HttpRequest) -> datetime.date | None:
+    """День, открытый на странице по `HX-Current-URL`; `None`, если страница не день."""
+    path = request.htmx.current_url_abs_path  # type: ignore[attr-defined]
+    if not path:
+        return None
+    try:
+        match = resolve(path.split("?")[0])
+    except Resolver404:
+        return None
+    if match.url_name == "day":
+        return datetime.date.today()
+    if match.url_name == "day_on":
+        try:
+            return datetime.date.fromisoformat(match.kwargs["date"])
+        except ValueError:
+            return None
+    return None
+
+
 class UndoView(HtmxLoginRequiredMixin, View):
     """Применяет подписанный снимок из тоста «Вернуть»."""
 
@@ -470,17 +490,26 @@ class UndoView(HtmxLoginRequiredMixin, View):
             messages.error(request, "Уже нельзя вернуть")
         else:
             messages.success(request, "Возвращено")
-        day = restored.date if restored and restored.date else datetime.date.today()
         if not request.htmx:  # type: ignore[attr-defined]
+            day = restored.date if restored and restored.date else datetime.date.today()
             return redirect(_day_url(day))
-        if restored is None or restored.date is None:
-            response = HttpResponse()
-            response["HX-Reswap"] = "none"
-            if restored is not None:
-                trigger_client_event(response, "catalog:changed")
-            return with_toasts(response, request)
-        context = _day_context(request.user, day)
-        return sheet_saved_response(request, "core/day.html#feed", context, "#feed")
+        if restored is not None and restored.date is not None:
+            # Лента — день страницы, а не записи: после переноса даты они различаются.
+            day = _shown_day(request) or restored.date
+            context = _day_context(request.user, day)
+            return sheet_saved_response(request, "core/day.html#feed", context, "#feed")
+        if restored is not None and restored.product_id is not None:
+            product = Product.objects.filter(pk=restored.product_id).first()
+            html = render_to_string(
+                "components/barcode_chips.html", {"product": product, "oob": True}, request=request
+            )
+            response = with_toasts(HttpResponse(html), request)
+        else:
+            response = with_toasts(HttpResponse(), request)
+        response["HX-Reswap"] = "none"
+        if restored is not None:
+            trigger_client_event(response, "catalog:changed")
+        return response
 
 
 class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):

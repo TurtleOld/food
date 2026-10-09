@@ -127,6 +127,17 @@ class BarcodeUnbindTests(BarcodeBase):
         self.assertEqual(self.codes(self.chicken), [EAN13])
         self.assertContains(undone, "Возвращено")
 
+    def test_undo_redraws_the_chips_of_an_open_product_sheet(self):
+        barcode = Barcode.objects.create(code=EAN13, product=self.chicken)
+        token = token_of(self.client.post(self.unbind_url(barcode), headers=HTMX))
+
+        undone = self.client.post(reverse("core:undo"), {"token": token}, headers=HTMX)
+
+        self.assertContains(
+            undone, f"hx-swap-oob=\"outerHTML:#barcodes[data-product='{self.chicken.pk}']\""
+        )
+        self.assertContains(undone, f"▦ {EAN13}")
+
     def test_undo_is_refused_when_the_code_was_taken_meanwhile(self):
         barcode = Barcode.objects.create(code=EAN13, product=self.chicken)
         token = token_of(self.client.post(self.unbind_url(barcode), headers=HTMX))

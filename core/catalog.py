@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.db.models import Q
 
 from core.barcodes import normalize_barcode
@@ -42,6 +43,8 @@ def _restore_deleted_product(member: Member, payload: dict[str, Any]) -> Restore
     # Тот же pk нужен, чтобы вернуть ссылки (например, открытые вкладки) на прежний адрес.
     if Product.objects.filter(pk=payload["pk"]).exists():
         raise CannotUndo
+    if not get_user_model().objects.filter(pk=payload["author"]).exists():
+        raise CannotUndo
     Product.objects.create(
         pk=payload["pk"],
         name=payload["name"],
@@ -76,7 +79,7 @@ def _restore_unbound_barcode(member: Member, payload: dict[str, Any]) -> Restore
     if not Product.objects.filter(pk=payload["product"]).exists():
         raise CannotUndo
     Barcode.objects.create(code=payload["code"], product_id=payload["product"])
-    return Restored()
+    return Restored(product_id=payload["product"])
 
 
 def search_catalog(query: str) -> list[Product]:
