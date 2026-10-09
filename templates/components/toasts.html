@@ -1,3 +1,12 @@
 {% for message in messages %}
-  <div class="toast{% if message.level_tag == 'error' %} is-error{% endif %}" role="status" x-data x-init="setTimeout(() => $el.remove(), 8000)">{{ message }}</div>
+  <div class="toast{% if message.level_tag == 'error' %} is-error{% endif %}" role="status" x-data x-init="setTimeout(() => $el.remove(), 8000)">
+    <span>{{ message }}</span>
+    {% if message.extra_tags %}
+      <form method="post" action="{% url 'core:undo' %}" hx-post="{% url 'core:undo' %}" hx-on::after-request="this.closest('.toast').remove()">
+        {% csrf_token %}
+        <input type="hidden" name="token" value="{{ message.extra_tags }}">
+        <button type="submit" class="btn-quiet">Вернуть</button>
+      </form>
+    {% endif %}
+  </div>
 {% endfor %}

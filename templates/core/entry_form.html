@@ -50,6 +50,7 @@
       {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
 
       <button class="button is-primary is-fullwidth mt-5" type="submit">Сохранить</button>
+      <p class="mt-4 has-text-centered"><a class="has-text-danger" href="{% url 'core:entry_delete' entry.pk %}" hx-post="{% url 'core:entry_delete' entry.pk %}">Удалить запись</a></p>
     </form>
     {% endpartialdef %}
     <p><a href="{{ cancel_url }}">Отмена</a></p>
