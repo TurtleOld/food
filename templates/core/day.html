@@ -38,6 +38,10 @@
           <p class="muted">Цель не задана</p>
           <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
         {% endif %}
+        <p class="day-total mt-4 mb-0">
+          Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
+          <span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>
+        </p>
       </div>
     </div>
 
