@@ -3,7 +3,7 @@ from typing import Any, cast
 from django import forms
 from django.conf import settings
 
-from assistant.models import LLMSettings, Proposal
+from assistant.models import LLMSettings, Proposal, SummarySettings
 from assistant.photos import PhotoError, prepare_photo
 from core.forms import DayField, day_widget
 from core.models import DiaryEntry, Product
@@ -242,3 +242,33 @@ class ChatMessageForm(forms.Form):
             except PhotoError as error:
                 self.add_error("photo", str(error))
         return cleaned_data
+
+
+class SummarySettingsForm(forms.ModelForm):
+    """Личное расписание Сводок: включение и местное время каждого вида."""
+
+    class Meta:
+        model = SummarySettings
+        fields = ["evening_enabled", "evening_time", "weekly_enabled", "weekly_time"]
+        labels = {
+            "evening_enabled": "Вечерняя сводка",
+            "evening_time": "Время вечерней сводки",
+            "weekly_enabled": "Недельная сводка",
+            "weekly_time": "Время недельной сводки",
+        }
+        help_texts = {
+            "evening_enabled": "КБЖУ дня, сравнение с целью и вчерашним днём.",
+            "weekly_enabled": "Семь дней, среднее за день и динамика веса по Замерам.",
+        }
+        widgets = {
+            "evening_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+            "weekly_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field, forms.BooleanField):
+                field.widget.attrs.setdefault("class", "checkbox")
+            else:
+                field.widget.attrs.setdefault("class", "input num")
