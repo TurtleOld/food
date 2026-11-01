@@ -6,7 +6,6 @@
 """
 
 import json
-import math
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -17,10 +16,10 @@ from urllib.request import Request, urlopen
 from assistant.budget import BudgetUnavailable, release, reserve, settle
 from assistant.models import LLMSettings
 
-# Без токенизатора: два знака на токен переоценивает и латиницу, и кириллицу — лимит не превысится.
-CHARS_PER_TOKEN = 2
-IMAGE_TOKENS = 1000
-MESSAGE_OVERHEAD_TOKENS = 4
+# Без токенизатора: один токен на UTF-8 байт — верхняя граница для BPE, безопасная
+# для кириллицы. Изображение оценивается фиксированным бюджетом на высокое разрешение.
+IMAGE_TOKENS = 4096
+MESSAGE_OVERHEAD_TOKENS = 16
 
 
 class LLMGatewayError(Exception):
@@ -51,7 +50,7 @@ class LLMResult:
 
 
 def _text_tokens(text: str) -> int:
-    return math.ceil(len(text) / CHARS_PER_TOKEN)
+    return len(text.encode("utf-8"))
 
 
 def _content_tokens(content: Any) -> int:
@@ -70,10 +69,27 @@ def _content_tokens(content: Any) -> int:
     return tokens
 
 
-def _estimated_input_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
-    return sum(
-        _content_tokens(message.get("content")) + MESSAGE_OVERHEAD_TOKENS for message in messages
-    )
+def _message_tokens(message: Mapping[str, Any]) -> int:
+    tokens = _content_tokens(message.get("content")) + MESSAGE_OVERHEAD_TOKENS
+    tool_calls = message.get("tool_calls")
+    if isinstance(tool_calls, list):
+        for call in tool_calls:
+            function = call.get("function") if isinstance(call, dict) else None
+            if isinstance(function, dict):
+                tokens += _text_tokens(str(function.get("name") or ""))
+                tokens += _text_tokens(str(function.get("arguments") or ""))
+    return tokens
+
+
+def _estimated_input_tokens(
+    messages: Sequence[Mapping[str, Any]],
+    tools: Sequence[Mapping[str, Any]] | None = None,
+) -> int:
+    """Консервативная оценка всего входа: сообщения, tool_calls, схемы tools и фото."""
+    tokens = sum(_message_tokens(message) for message in messages)
+    if tools:
+        tokens += _text_tokens(json.dumps(tools, ensure_ascii=False))
+    return tokens
 
 
 def _payload(
@@ -182,12 +198,12 @@ def complete(
         raise BudgetUnavailable(
             "Ассистент не настроен: администратор должен указать провайдера, тарифы и бюджет."
         )
-    if _estimated_input_tokens(messages) > settings.max_input_tokens:
+    if _estimated_input_tokens(messages, tools) > settings.max_input_tokens:
         raise BudgetUnavailable(
             "Запрос слишком большой для настроенного лимита. Сократите текст или фото."
         )
 
-    reservation = reserve(request_id=uuid.uuid4().hex)
+    reservation = reserve(settings, request_id=uuid.uuid4().hex)
     try:
         data = _post(settings, _payload(settings, messages, tools))
         text, tool_calls, usage = _parse(data)

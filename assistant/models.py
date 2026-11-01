@@ -1,6 +1,7 @@
 """Настройки провайдера, резервы бюджета и неизменная история стоимости."""
 
 from decimal import Decimal
+from typing import Any
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -9,9 +10,11 @@ from django.db import models
 class LLMSettings(models.Model):
     """Единственные на семью настройки OpenAI-совместимого провайдера и бюджета.
 
-    Хранятся в БД, а не в .env: их меняет администратор через UI. Пустые или нулевые
-    значения означают, что ассистент ещё не настроен и обращения к модели запрещены.
+    Хранятся в БД, а не в .env: их меняет администратор через UI. Пустые значения
+    означают, что ассистент ещё не настроен и обращения к модели запрещены.
     """
+
+    SINGLETON_PK = 1
 
     base_url = models.URLField(max_length=500, blank=True)
     model = models.CharField(max_length=200, default="deepseek-flash")
@@ -56,10 +59,20 @@ class LLMSettings(models.Model):
     def __str__(self) -> str:
         return self.model or "Провайдер не настроен"
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Не даёт создать вторую строку: все правки идут в строку с постоянным pk."""
+        self.pk = self.SINGLETON_PK
+        super().save(*args, **kwargs)
+
     @classmethod
     def current(cls) -> "LLMSettings":
-        """Возвращает сохранённые настройки или пустой экземпляр для первой формы."""
-        return cls.objects.order_by("pk").first() or cls()
+        """Возвращает единственную строку настроек, создавая её при первом обращении.
+
+        `get_or_create` переживает гонку двух первых форм: проигравший INSERT получает
+        уже созданную строку, а не 500 и не вторую конфигурацию.
+        """
+        settings, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return settings
 
     @property
     def is_configured(self) -> bool:
@@ -102,6 +115,8 @@ class BudgetReservation(models.Model):
     cached_price_rub = models.DecimalField(max_digits=12, decimal_places=4)
     output_price_rub = models.DecimalField(max_digits=12, decimal_places=4)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    billing_month = models.DateField(db_index=True)
+    expires_at = models.DateTimeField(db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
@@ -128,6 +143,7 @@ class UsageRecord(models.Model):
     cached_price_rub = models.DecimalField(max_digits=12, decimal_places=4)
     output_price_rub = models.DecimalField(max_digits=12, decimal_places=4)
     cost_rub = models.DecimalField(max_digits=14, decimal_places=6)
+    billing_month = models.DateField(db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

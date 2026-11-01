@@ -6,6 +6,7 @@ from urllib.error import URLError
 from django.test import TestCase
 
 from assistant.budget import BudgetUnavailable, month_summary
+from assistant.budget import reserve as budget_reserve
 from assistant.gateway import LLMGatewayError, complete
 from assistant.models import BudgetReservation, LLMSettings, UsageRecord
 
@@ -71,13 +72,72 @@ class RefusalTests(TestCase):
         urlopen.assert_not_called()
         self.assertEqual(month_summary().spent, Decimal("0"))
 
-    def test_too_large_input_is_refused_before_the_provider(self):
-        configure(max_input_tokens=10)
+    def assert_refused(self, messages, tools=None):
         with mock.patch(URLOPEN) as urlopen:
             with self.assertRaisesMessage(BudgetUnavailable, "слишком"):
-                complete([{"role": "user", "content": "а" * 1000}])
-
+                complete(messages, tools=tools)
         urlopen.assert_not_called()
+
+    def test_too_large_input_is_refused_before_the_provider(self):
+        configure(max_input_tokens=10)
+
+        self.assert_refused([{"role": "user", "content": "а" * 1000}])
+
+    def test_russian_text_uses_a_conservative_byte_bound(self):
+        configure(max_input_tokens=100)
+
+        self.assert_refused([{"role": "user", "content": "привет" * 20}])
+
+    def test_tools_schema_counts_toward_the_input_limit(self):
+        configure(max_input_tokens=200)
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_catalog",
+                    "description": "я" * 1000,
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        self.assert_refused([{"role": "user", "content": "ok"}], tools=tools)
+
+    def test_tool_call_arguments_count_toward_the_input_limit(self):
+        configure(max_input_tokens=200)
+        messages = [
+            {"role": "user", "content": "ok"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "search_catalog", "arguments": "я" * 1000},
+                    }
+                ],
+            },
+        ]
+
+        self.assert_refused(messages)
+
+    def test_image_has_a_token_budget(self):
+        configure(max_input_tokens=100)
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "ok"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/jpeg;base64,AAAA"},
+                    },
+                ],
+            }
+        ]
+
+        self.assert_refused(messages)
 
 
 class RequestTests(TestCase):
@@ -121,6 +181,27 @@ class RequestTests(TestCase):
         self.assertEqual(
             BudgetReservation.objects.filter(status=BudgetReservation.Status.PENDING).count(), 0
         )
+
+    def test_payload_and_reservation_use_the_same_settings_snapshot(self):
+        configure()
+
+        def change_settings_then_reserve(settings, request_id=None):
+            LLMSettings.objects.filter(pk=settings.pk).update(
+                model="other-model", input_price_rub=Decimal("999.00")
+            )
+            return budget_reserve(settings, request_id=request_id)
+
+        with (
+            mock.patch(URLOPEN, return_value=FakeResponse(answer())) as urlopen,
+            mock.patch("assistant.gateway.reserve", side_effect=change_settings_then_reserve),
+        ):
+            result = complete([{"role": "user", "content": "Привет"}])
+
+        payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertEqual(payload["model"], "deepseek-flash")
+        self.assertEqual(result.model, "deepseek-flash")
+        self.assertEqual(UsageRecord.objects.get().model, "deepseek-flash")
+        self.assertEqual(UsageRecord.objects.get().input_price_rub, Decimal("100.0000"))
 
     def test_vision_and_tools_pass_through_and_tool_calls_come_back(self):
         configure()
