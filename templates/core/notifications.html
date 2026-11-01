@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <h1 class="title is-3 mb-4">Уведомления</h1>
+
+  <div class="box" id="push-settings" data-vapid-public-key="{{ vapid_public_key }}">
+    {% if can_edit_push %}
+      <p class="mb-3"><a class="btn-quiet" href="{% url 'core:push_settings' %}">Настройки Push для администратора</a></p>
+    {% endif %}
+    {% if push_configured %}
+      <p id="push-status">
+        {% if subscription_count %}
+          Уведомления включены на устройствах: <b class="num">{{ subscription_count }}</b>.
+        {% else %}
+          Уведомления выключены.
+        {% endif %}
+      </p>
+      <p class="muted">
+        Сводки придут Push-уведомлением только на устройства, где вы сами включили уведомления.
+        Приложение работает и без них.
+      </p>
+
+      <div class="buttons mt-4">
+        <button class="btn-main" type="button" id="push-enable"{% if subscription_count %} hidden{% endif %}>
+          Включить уведомления
+        </button>
+        <button class="btn-quiet" type="button" id="push-disable"{% if not subscription_count %} hidden{% endif %}>
+          Выключить на этом устройстве
+        </button>
+      </div>
+      <p class="help is-danger" id="push-error" hidden></p>
+      <noscript>
+        <p class="muted">Для включения уведомлений нужен JavaScript.</p>
+      </noscript>
+
+      <form id="push-subscribe-form" method="post" action="{% url 'core:push_subscribe' %}" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="endpoint">
+        <input type="hidden" name="p256dh">
+        <input type="hidden" name="auth">
+      </form>
+      <form id="push-unsubscribe-form" method="post" action="{% url 'core:push_unsubscribe' %}" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="endpoint">
+      </form>
+
+      <script src="{% static 'js/push.js' %}" defer></script>
+    {% else %}
+      <p class="muted">Push-уведомления не настроены на сервере. Приложение работает без них.</p>
+    {% endif %}
+
+    <p class="is-size-7 muted mt-4">
+      На iPhone и iPad уведомления работают только в приложении, добавленном на экран «Домой».
+    </p>
+  </div>
+{% endblock %}

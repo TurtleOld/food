@@ -1,3 +1,5 @@
+import base64
+import binascii
 import datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -8,9 +10,18 @@ from django.db.models import TextChoices
 from django.utils import timezone
 
 from core.barcodes import normalize_barcode
-from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
+from core.models import (
+    Barcode,
+    DailyTarget,
+    DiaryEntry,
+    Product,
+    Profile,
+    PushSettings,
+    WeightMeasurement,
+)
 from core.nutrition import NUTRITION_FIELDS, NUTRITION_ROWS
 from core.profile import MAX_ADJUSTMENT_KCAL, MIN_ADJUSTMENT_KCAL
+from core.push import is_allowed_push_endpoint
 
 
 class DayField(forms.DateField):
@@ -356,3 +367,94 @@ class DiaryCopyForm(forms.Form):
             if scope == self.Scope.MEAL and not cleaned_data.get("meal_type"):
                 self.add_error("meal_type", "Выберите приём пищи")
         return cleaned_data
+
+
+def _base64url_bytes(value: str) -> bytes:
+    """Декодирует base64url с необязательным padding или объясняет, что ключ неверный."""
+    padded = value + "=" * (-len(value) % 4)
+    try:
+        return base64.urlsafe_b64decode(padded)
+    except (ValueError, binascii.Error):
+        raise forms.ValidationError("Ключ должен быть в base64url") from None
+
+
+class PushSubscriptionForm(forms.Form):
+    """Подписка браузера: endpoint и ключи шифрования из `PushSubscription.toJSON()`."""
+
+    endpoint = forms.URLField(max_length=2048)
+    p256dh = forms.CharField(max_length=200)
+    auth = forms.CharField(max_length=100)
+
+    def clean_endpoint(self) -> str:
+        """Не принимает endpoint не из известного push-сервиса."""
+        endpoint = self.cleaned_data["endpoint"]
+        if not is_allowed_push_endpoint(endpoint):
+            raise forms.ValidationError("Неизвестный сервис уведомлений")
+        return endpoint
+
+    def clean_p256dh(self) -> str:
+        """Публичный ключ устройства — несжатая точка P-256, ровно 65 байт."""
+        p256dh = self.cleaned_data["p256dh"]
+        if len(_base64url_bytes(p256dh)) != 65:
+            raise forms.ValidationError("Неверный размер ключа устройства")
+        return p256dh
+
+    def clean_auth(self) -> str:
+        """Секрет подписки — ровно 16 байт."""
+        auth = self.cleaned_data["auth"]
+        if len(_base64url_bytes(auth)) != 16:
+            raise forms.ValidationError("Неверный размер секрета подписки")
+        return auth
+
+
+class PushUnsubscribeForm(forms.Form):
+    """Отписка устройства; без endpoint удаляет все подписки Члена семьи."""
+
+    endpoint = forms.URLField(max_length=2048, required=False)
+
+
+class PushSettingsForm(forms.ModelForm):
+    """VAPID-настройки администратора; пустой приватный ключ сохраняет записанный."""
+
+    class Meta:
+        model = PushSettings
+        fields = ["vapid_public_key", "vapid_private_key", "vapid_subject"]
+        labels = {
+            "vapid_public_key": "VAPID public key",
+            "vapid_private_key": "VAPID private key",
+            "vapid_subject": "VAPID subject",
+        }
+        help_texts = {
+            "vapid_public_key": "Base64url-ключ, который браузер получает при подписке.",
+            "vapid_private_key": (
+                "PEM или base64 DER. Оставьте пустым, чтобы не менять сохранённый ключ."
+            ),
+            "vapid_subject": "Контакт администратора: mailto:you@example.com или HTTPS URL.",
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "input")
+        self.fields["vapid_private_key"].required = False
+        self.fields["vapid_private_key"].widget = forms.PasswordInput(render_value=False)
+        self.fields["vapid_private_key"].widget.attrs["autocomplete"] = "off"
+
+    def clean_vapid_public_key(self) -> str:
+        """Публичный VAPID-ключ — тоже несжатая точка P-256."""
+        key = self.cleaned_data["vapid_public_key"].strip()
+        if key and len(_base64url_bytes(key)) != 65:
+            raise forms.ValidationError("Неверный размер публичного ключа")
+        return key
+
+    def clean_vapid_private_key(self) -> str:
+        """Пустое поле не стирает уже сохранённый приватный ключ."""
+        key = self.cleaned_data["vapid_private_key"].strip()
+        if key:
+            return key
+        if self.instance.pk and self.instance.vapid_private_key:
+            return self.instance.vapid_private_key
+        return ""
+
+    def clean_vapid_subject(self) -> str:
+        return self.cleaned_data["vapid_subject"].strip()
