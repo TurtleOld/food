@@ -203,16 +203,19 @@ def create_proposal(
         meal_type=_meal(meal_type),
         amount=_amount(amount),
         product=product,
+        product_name=product.name if product is not None else new_fields["new_name"],
         **new_fields,
     )
 
 
 def create_product_proposal(member: Any, *, new_product: Any) -> Proposal:
     """Создаёт Предложение нового Продукта без Записи дневника; Каталог не меняет."""
+    new_fields = _new_product(new_product)
     return Proposal.objects.create(
         member=member,
         kind=Proposal.Kind.PRODUCT,
-        **_new_product(new_product),
+        product_name=new_fields["new_name"],
+        **new_fields,
     )
 
 
@@ -309,5 +312,10 @@ def reject_proposal(member: Any, proposal_id: int) -> Proposal:
         if proposal.status == Proposal.Status.PENDING:
             proposal.status = Proposal.Status.REJECTED
             proposal.decided_at = timezone.now()
-            proposal.save(update_fields=["status", "decided_at"])
+            fields = ["status", "decided_at"]
+            if proposal.kind == Proposal.Kind.ENTRY and proposal.product_id is not None:
+                # Отклонённое Предложение не должно навсегда блокировать удаление Продукта.
+                proposal.product = None
+                fields.append("product")
+            proposal.save(update_fields=fields)
         return proposal

@@ -5,12 +5,10 @@
 """
 
 import datetime
-import importlib
 import inspect
 import json
 from collections.abc import Mapping
 from decimal import Decimal
-from types import ModuleType
 from typing import Any, Callable
 
 from assistant.models import Proposal
@@ -25,6 +23,7 @@ from core.diary import search_products
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
 from core.off import OffLookup
 from core.off import lookup as off_lookup
+from core.profile import profile_of, target_suggestion
 
 MAX_CATALOG_RESULTS = 20
 MAX_DIARY_DAYS = 31
@@ -81,27 +80,7 @@ def _target(target: DailyTarget | None) -> dict[str, Any] | None:
     }
 
 
-def _profile_module() -> ModuleType | None:
-    """Модуль Профиля из тикета 04, если он уже есть в этой ветке.
-
-    Импорт ленивый и без `core.models.Profile`: ветка 05 не должна ломаться,
-    пока Профиль не влит. Отсутствие модуля — это `None`, а не ошибка.
-    """
-    try:
-        return importlib.import_module("core.profile")
-    except ModuleNotFoundError as error:
-        if error.name != "core.profile":
-            raise
-        return None
-
-
 def _profile(member: Any) -> dict[str, Any] | None:
-    module = _profile_module()
-    if module is None:
-        return None
-    profile_of = getattr(module, "profile_of", None)
-    if profile_of is None:
-        return None
     profile = profile_of(member)
     if profile is None:
         return None
@@ -116,13 +95,7 @@ def _profile(member: Any) -> dict[str, Any] | None:
 
 
 def _suggestion(member: Any) -> dict[str, Any] | None:
-    module = _profile_module()
-    if module is None:
-        return None
-    suggestion_of = getattr(module, "target_suggestion", None)
-    if suggestion_of is None:
-        return None
-    suggestion = suggestion_of(member)
+    suggestion = target_suggestion(member)
     if suggestion is None:
         return None
     return {

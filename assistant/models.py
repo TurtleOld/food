@@ -164,6 +164,7 @@ class Proposal(models.Model):
         on_delete=models.PROTECT,
         related_name="proposals",
     )
+    product_name = models.CharField(max_length=200, blank=True)
     new_name = models.CharField(max_length=200, blank=True)
     new_base_unit = models.CharField(max_length=2, choices=Product.BaseUnit.choices, blank=True)
     new_calories = models.DecimalField(max_digits=7, decimal_places=1, null=True, blank=True)
@@ -184,7 +185,7 @@ class Proposal(models.Model):
         ordering = ["-created_at", "-pk"]
 
     def __str__(self) -> str:
-        name = self.product.name if self.product else self.new_name
+        name = self.product.name if self.product else self.product_name or self.new_name
         return f"{name}: {self.get_status_display()}"
 
     @property

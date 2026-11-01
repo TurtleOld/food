@@ -1,19 +1,19 @@
 <article class="box proposal" id="proposal-{{ proposal.pk }}">
   {% if proposal.kind == "product" %}
     <p>
-      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.new_name }}{% endif %}</b>
+      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>
       — новый Продукт
     </p>
   {% else %}
     <p>
-      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.new_name }}{% endif %}</b>,
+      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>,
       <span class="num">{{ proposal.amount|floatformat:1 }}</span>
       {% if proposal.product %}{{ proposal.product.get_base_unit_display }}{% else %}{{ proposal.get_new_base_unit_display }}{% endif %}
       → {{ proposal.get_meal_type_display }} · {{ proposal.date|date:"d.m.Y" }}
     </p>
   {% endif %}
 
-  {% if not proposal.product %}
+  {% if not proposal.product and proposal.new_name %}
     <p class="is-size-7 muted num">
       На 100: {{ proposal.new_calories|floatformat:1 }} ккал ·
       Б {{ proposal.new_proteins|floatformat:1 }} · Ж {{ proposal.new_fats|floatformat:1 }} · У {{ proposal.new_carbs|floatformat:1 }}

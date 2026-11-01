@@ -1,7 +1,6 @@
 import datetime
 import json
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -10,8 +9,9 @@ from django.test import TestCase
 
 from assistant.models import Proposal
 from assistant.tools import TOOLS, dispatch_tool
-from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
 from core.off import OffLookup, Outcome
+from core.profile import target_suggestion
 
 User = get_user_model()
 
@@ -217,7 +217,7 @@ class ProfileToolTest(TestCase):
     def setUp(self):
         self.member = User.objects.create_user(username="alice", password="s3cret-pass")
 
-    def test_without_profile_module_target_is_still_read(self):
+    def test_without_profile_target_is_still_read(self):
         DailyTarget.objects.create(
             member=self.member,
             calories=Decimal("2000"),
@@ -232,29 +232,22 @@ class ProfileToolTest(TestCase):
         self.assertIsNone(result["suggestion"])
         self.assertEqual(result["target"]["calories"], "2000.0")
 
-    def test_profile_and_suggestion_are_serialized_when_available(self):
-        profile = SimpleNamespace(
+    def test_profile_and_suggestion_are_serialized_from_real_models(self):
+        Profile.objects.create(
+            member=self.member,
             height_cm=180,
             birth_date=datetime.date(1990, 1, 2),
-            sex="male",
-            activity="moderate",
-            is_complete=True,
+            sex=Profile.Sex.MALE,
+            activity=Profile.Activity.MODERATE,
         )
-        suggestion = SimpleNamespace(
-            maintenance_kcal=Decimal("2400"),
-            adjustment_kcal=Decimal("0"),
-            calories=Decimal("2400"),
-            proteins=Decimal("120"),
-            fats=Decimal("70"),
-            carbs=Decimal("300"),
-        )
-        module = SimpleNamespace(
-            profile_of=lambda member: profile,
-            target_suggestion=lambda member: suggestion,
+        WeightMeasurement.objects.create(
+            member=self.member,
+            date=datetime.date(2026, 10, 31),
+            weight_kg=Decimal("80"),
         )
 
-        with mock.patch("assistant.tools._profile_module", return_value=module):
-            result = dispatch_tool(self.member, "read_profile", {})
+        result = dispatch_tool(self.member, "read_profile", {})
+        expected = target_suggestion(self.member)
 
         self.assertEqual(
             result["profile"],
@@ -266,52 +259,39 @@ class ProfileToolTest(TestCase):
                 "is_complete": True,
             },
         )
-        self.assertEqual(result["suggestion"]["calories"], "2400")
+        self.assertIsNotNone(expected)
+        assert expected is not None
+        self.assertEqual(result["suggestion"]["calories"], str(expected.calories))
+        self.assertEqual(result["suggestion"]["proteins"], str(expected.proteins))
 
-    def test_incomplete_optional_profile_interface_returns_nulls(self):
-        profile = SimpleNamespace(
-            height_cm=None,
+    def test_incomplete_profile_returns_no_suggestion(self):
+        Profile.objects.create(
+            member=self.member,
+            height_cm=180,
             birth_date=None,
             sex="",
             activity="",
-            is_complete=False,
         )
-        module = SimpleNamespace(profile_of=lambda member: profile)
 
-        with mock.patch("assistant.tools._profile_module", return_value=module):
-            result = dispatch_tool(self.member, "read_profile", {})
+        result = dispatch_tool(self.member, "read_profile", {})
 
+        self.assertFalse(result["profile"]["is_complete"])
         self.assertIsNone(result["profile"]["birth_date"])
         self.assertIsNone(result["suggestion"])
 
-        with mock.patch(
-            "assistant.tools._profile_module",
-            return_value=SimpleNamespace(
-                profile_of=lambda member: None, target_suggestion=lambda member: None
-            ),
-        ):
-            result = dispatch_tool(self.member, "read_profile", {})
+    def test_complete_profile_without_weight_returns_no_suggestion(self):
+        Profile.objects.create(
+            member=self.member,
+            height_cm=180,
+            birth_date=datetime.date(1990, 1, 2),
+            sex=Profile.Sex.MALE,
+            activity=Profile.Activity.MODERATE,
+        )
 
-        self.assertIsNone(result["profile"])
+        result = dispatch_tool(self.member, "read_profile", {})
+
+        self.assertTrue(result["profile"]["is_complete"])
         self.assertIsNone(result["suggestion"])
-
-        with mock.patch(
-            "assistant.tools._profile_module",
-            return_value=SimpleNamespace(profile_of=lambda m: None),
-        ):
-            self.assertIsNone(dispatch_tool(self.member, "read_profile", {})["profile"])
-
-        with mock.patch("assistant.tools._profile_module", return_value=SimpleNamespace()):
-            self.assertIsNone(dispatch_tool(self.member, "read_profile", {})["profile"])
-
-    def test_import_error_inside_another_module_is_not_hidden(self):
-        error = ModuleNotFoundError("No module named 'numpy'", name="numpy")
-
-        with (
-            mock.patch("assistant.tools.importlib.import_module", side_effect=error),
-            self.assertRaises(ModuleNotFoundError),
-        ):
-            dispatch_tool(self.member, "read_profile", {})
 
 
 class ProposeEntryToolTest(TestCase):

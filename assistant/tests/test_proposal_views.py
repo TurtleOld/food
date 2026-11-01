@@ -248,7 +248,17 @@ class ProposalViewsTest(TestCase):
         self.assertRedirects(response, reverse("assistant:proposals"))
         proposal.refresh_from_db()
         self.assertEqual(proposal.status, Proposal.Status.REJECTED)
+        self.assertIsNone(proposal.product)
+        self.assertEqual(proposal.product_name, "Молоко 3.2%")
         self.assertEqual(DiaryEntry.objects.count(), 0)
+        self.assertContains(self.client.get(reverse("assistant:proposals")), "Молоко 3.2%")
+
+        deleted = self.client.post(
+            reverse("core:product_delete", args=[self.product.pk]),
+            headers={"HX-Request": "true"},
+        )
+        self.assertContains(deleted, "Продукт удалён")
+        self.assertFalse(Product.objects.filter(pk=self.product.pk).exists())
 
     def test_confirm_rejected_proposal_shows_error_and_creates_nothing(self):
         proposal = self._proposal()
