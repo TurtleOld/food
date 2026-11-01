@@ -205,6 +205,30 @@ class WeightMeasurement(models.Model):
         return f"{self.date:%d/%m/%Y}: {self.weight_kg} кг"
 
 
+class DiaryCopyOperation(models.Model):
+    """Одноразовый ключ выполненного копирования Дневника.
+
+    Уникальность в паре с Членом семьи делает повторную отправку той же формы
+    безопасной, в том числе при двух одновременных запросах.
+    """
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="diary_copy_operations",
+    )
+    key = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["member", "key"], name="unique_member_copy_operation")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.member_id}: {self.key}"
+
+
 class DailyTarget(models.Model):
     """Суточная цель по КБЖУ, заданная вручную и своя у каждого члена семьи."""
 
