@@ -38,6 +38,7 @@ from core.catalog import (
     bind_barcode,
     catalog_products,
     entries_count,
+    proposals_count,
     search_by_code,
     search_catalog,
     unbind_barcode,
@@ -903,6 +904,7 @@ class ProductUpdateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CatalogSheetMix
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context["usage"] = entries_count(self.object)
+        context["proposal_usage"] = proposals_count(self.object)
         return context
 
 
@@ -947,7 +949,7 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
         except ProtectedError:
             messages.error(
                 self.request,
-                "Продукт нельзя удалить: на него ссылаются записи дневника",
+                "Продукт нельзя удалить: на него ссылаются записи дневника или предложения",
             )
             return redirect(self.success_url)
         messages.success(self.request, "Продукт удалён")
@@ -960,8 +962,20 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
             response = HttpResponse()
             response["HX-Reswap"] = "none"
             return with_toasts(response, self.request)
+        if proposals_count(product):
+            messages.error(self.request, "Удалить нельзя — продукт используется в предложении")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         token = product_deletion_token(product, self.request.user)
-        product.delete()
+        try:
+            product.delete()
+        except ProtectedError:
+            # Между проверкой и удалением могла появиться новая ссылка.
+            messages.error(self.request, "Удалить нельзя — продукт используется")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         add_undo_message(self.request, "Продукт удалён", token)
         return sheet_saved_response(
             self.request, "core/product_list.html#catalog", _catalog_context(), "#catalog"

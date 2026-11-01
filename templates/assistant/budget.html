@@ -5,9 +5,12 @@
 {% block content %}
   <div class="page-head">
     <h1 class="title is-3">Бюджет ассистента</h1>
-    {% if can_edit %}
-      <a class="btn-quiet" href="{% url 'assistant:settings' %}">Настроить</a>
-    {% endif %}
+    <div>
+      <a class="btn-quiet" href="{% url 'assistant:proposals' %}">Предложения</a>
+      {% if can_edit %}
+        <a class="btn-quiet" href="{% url 'assistant:settings' %}">Настроить</a>
+      {% endif %}
+    </div>
   </div>
 
   {% if not summary.configured %}
