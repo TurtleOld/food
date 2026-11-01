@@ -5,7 +5,7 @@
 {% block content %}
   <div class="page-head">
     <h1 class="title is-3">Бюджет ассистента</h1>
-    <div>
+    <div class="page-head-links">
       <a class="btn-quiet" href="{% url 'assistant:chat' %}">Ассистент</a>
       <a class="btn-quiet" href="{% url 'assistant:proposals' %}">Предложения</a>
       {% if can_edit %}

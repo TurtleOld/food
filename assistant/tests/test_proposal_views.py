@@ -7,7 +7,11 @@ from django.test import TestCase
 from django.urls import reverse
 
 from assistant.models import Proposal
-from assistant.proposals import create_product_proposal, create_proposal
+from assistant.proposals import (
+    ProposalNotFound,
+    create_product_proposal,
+    create_proposal,
+)
 from core.models import DiaryEntry, Product
 
 User = get_user_model()
@@ -363,3 +367,174 @@ class ProposalViewsTest(TestCase):
             self.client.post(reverse("assistant:proposal_reject", args=[foreign.pk])).status_code,
             404,
         )
+
+    def test_chat_feed_shows_a_pending_card_and_confirm_stays_on_the_screen(self):
+        proposal = self._proposal()
+
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertContains(page, f'id="proposal-{proposal.pk}"')
+        self.assertContains(page, "Предложения ждут решения")
+
+        response = self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]),
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="feed"')
+        self.assertContains(response, "Предложение подтверждено")
+        self.assertNotContains(response, "Предложения ждут решения")
+        self.assertNotContains(response, "<html")
+        self.assertEqual(DiaryEntry.objects.count(), 1)
+
+    def test_chat_feed_hides_another_members_proposal(self):
+        self._proposal()
+        foreign_product = Product.objects.create(
+            name="Чужой продукт",
+            base_unit="g",
+            calories=Decimal("100"),
+            proteins=Decimal("1"),
+            fats=Decimal("1"),
+            carbs=Decimal("1"),
+            author=self.other,
+        )
+        create_proposal(
+            self.other,
+            amount="10",
+            date="2026-10-31",
+            meal_type="dinner",
+            product_id=foreign_product.pk,
+        )
+
+        page = self.client.get(reverse("assistant:chat"))
+
+        self.assertContains(page, "Молоко 3.2%")
+        self.assertNotContains(page, "Чужой продукт")
+
+    def test_edit_from_chat_opens_the_sheet_and_saves_back_into_the_feed(self):
+        proposal = self._proposal()
+        edit_url = reverse("assistant:proposal_edit", args=[proposal.pk])
+
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertContains(page, f'hx-get="{edit_url}"')
+
+        sheet = self.client.get(edit_url, headers={"HX-Request": "true"})
+        self.assertEqual(sheet.status_code, 200)
+        self.assertContains(sheet, 'id="proposal-form"')
+        self.assertContains(sheet, "Приём пищи")
+        self.assertNotContains(sheet, "<html")
+
+        saved = self.client.post(
+            edit_url,
+            {
+                "product": self.product.pk,
+                "amount": "250",
+                "date": "02/11/2026",
+                "meal_type": "dinner",
+                "new_name": "",
+                "new_base_unit": "",
+                "new_calories": "",
+                "new_proteins": "",
+                "new_fats": "",
+                "new_carbs": "",
+            },
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertContains(saved, 'id="feed"')
+        self.assertContains(saved, "Предложение поправлено")
+        self.assertNotContains(saved, "<html")
+        self.assertIn("sheet:close", saved["HX-Trigger"])
+        self.assertEqual(saved["HX-Retarget"], "#feed")
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.amount, Decimal("250.0"))
+        self.assertEqual(proposal.meal_type, DiaryEntry.MealType.DINNER)
+
+    def test_invalid_edit_in_the_sheet_keeps_the_form_open_with_an_error(self):
+        proposal = self._proposal(product_id=None, new_product=NEW_PRODUCT)
+
+        response = self.client.post(
+            reverse("assistant:proposal_edit", args=[proposal.pk]),
+            {
+                "product": "",
+                "new_name": "  ",
+                "new_base_unit": "g",
+                "new_calories": "-1",
+                "new_proteins": "8",
+                "new_fats": "14",
+                "new_carbs": "60",
+                "amount": "35",
+                "date": "01/11/2026",
+                "meal_type": "lunch",
+            },
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="proposal-form"')
+        self.assertContains(response, "Укажите название нового Продукта")
+        self.assertNotContains(response, "<html")
+
+    def test_conflict_while_saving_in_chat_reports_and_closes_the_sheet(self):
+        proposal = self._proposal()
+        edit_url = reverse("assistant:proposal_edit", args=[proposal.pk])
+
+        with mock.patch(
+            "assistant.views.update_pending_proposal",
+            side_effect=ProposalNotFound("Предложение не найдено или уже решено"),
+        ):
+            response = self.client.post(
+                edit_url,
+                {
+                    "product": self.product.pk,
+                    "amount": "100",
+                    "date": "02/11/2026",
+                    "meal_type": "lunch",
+                    "new_name": "",
+                    "new_base_unit": "",
+                    "new_calories": "",
+                    "new_proteins": "",
+                    "new_fats": "",
+                    "new_carbs": "",
+                },
+                headers={"HX-Request": "true"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Предложение не найдено или уже решено")
+        self.assertIn("sheet:close", response["HX-Trigger"])
+        self.assertNotContains(response, "<html")
+
+    def test_decision_error_in_chat_is_announced_in_the_feed(self):
+        proposal = self._proposal()
+        self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]),
+            headers={"HX-Request": "true"},
+        )
+
+        response = self.client.post(
+            reverse("assistant:proposal_reject", args=[proposal.pk]),
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Предложение уже подтверждено")
+        self.assertContains(response, 'id="feed"')
+        self.assertNotContains(response, "<html")
+
+    def test_product_proposal_in_chat_confirms_without_a_diary_entry(self):
+        proposal = self._product_proposal()
+
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertContains(page, "Предложение Продукта")
+        self.assertContains(page, "без Записи дневника")
+
+        response = self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]),
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertContains(response, "Предложение подтверждено")
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+        self.assertEqual(Product.objects.filter(name="Печенье овсяное").count(), 1)
