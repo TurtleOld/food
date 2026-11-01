@@ -72,4 +72,10 @@ def run_tick() -> int:
     if recovered:
         logger.warning("Recovered %d interrupted background task(s)", recovered)
     prune_results()
+    # Импорт внутри функции: assistant.summaries сам пользуется этой очередью.
+    from assistant.summaries import schedule_due
+
+    scheduled = schedule_due()
+    if scheduled:
+        logger.info("Scheduled %d summary task(s)", scheduled)
     return recovered
