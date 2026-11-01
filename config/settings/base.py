@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_htmx",
+    "django_tasks_db",
     "core",
     "assistant",
 ]
@@ -94,6 +95,22 @@ LOGOUT_REDIRECT_URL = "core:login"
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 365
+
+# Фоновые задачи хранятся в нашем Postgres и выполняются `manage.py db_worker`.
+# Redis и отдельный брокер не нужны.
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default"],
+    }
+}
+
+# Воркер, убитый посреди задачи, оставляет её в RUNNING навсегда: пакет не
+# умеет возвращать такие задачи в очередь. Тик считает зависшей задачу,
+# запущенную раньше этого порога, поэтому он должен быть больше самой долгой
+# задачи. Задачи обязаны быть идемпотентными на случай повторного запуска.
+TASKS_STUCK_AFTER_MINUTES = int(os.environ.get("TASKS_STUCK_AFTER_MINUTES", "30"))
+TASKS_RESULT_RETENTION_DAYS = int(os.environ.get("TASKS_RESULT_RETENTION_DAYS", "14"))
 
 # Контакт для User-Agent запросов к Open Food Facts: их правила требуют указать приложение и связь.
 OFF_CONTACT = os.environ.get("OFF_CONTACT", "dev@pavlovteam.ru")

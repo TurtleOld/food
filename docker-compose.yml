@@ -1,3 +1,8 @@
+x-app-environment: &app-environment
+  DJANGO_SETTINGS_MODULE: config.settings.dev
+  DATABASE_URL: postgres://food:food@db:5432/food
+  SECRET_KEY: dev-insecure-secret-key
+
 services:
   db:
     image: postgres:17-alpine
@@ -19,15 +24,40 @@ services:
       sh -c "uv sync --frozen &&
              python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
-    environment:
-      DJANGO_SETTINGS_MODULE: config.settings.dev
-      DATABASE_URL: postgres://food:food@db:5432/food
-      SECRET_KEY: dev-insecure-secret-key
+    environment: *app-environment
     volumes:
       - .:/app
       - /app/.venv
     ports:
       - "${DJANGO_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: >
+      sh -c "uv sync --frozen &&
+             python manage.py db_worker --queue-name '*'"
+    environment: *app-environment
+    volumes:
+      - .:/app
+      - /app/.venv
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    command: >
+      sh -c "uv sync --frozen &&
+             while true; do python manage.py tick; sleep 300; done"
+    environment: *app-environment
+    volumes:
+      - .:/app
+      - /app/.venv
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
