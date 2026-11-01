@@ -3,8 +3,10 @@ import json
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.tasks import TaskResultStatus
 from django.test import Client, TestCase
 from django.urls import reverse
+from django_tasks_db.models import DBTaskResult
 from pywebpush import WebPushException
 
 from core.models import PushSettings, PushSubscription
@@ -278,6 +280,15 @@ class BackgroundEntrypointTest(TestCase):
             send_push_notification.call(7, payload)
 
         send.assert_called_once_with(7, payload)
+
+    def test_task_is_enqueued_into_the_database_queue(self):
+        payload = {"web_push": 8030, "notification": {"title": "Сводка"}}
+
+        result = send_push_notification.enqueue(7, payload)
+
+        self.assertEqual(result.status, TaskResultStatus.READY)
+        stored = DBTaskResult.objects.get(task_path="core.push.send_push_notification")
+        self.assertEqual(stored.args_kwargs, {"args": [7, payload], "kwargs": {}})
 
 
 class NotificationPayloadTest(TestCase):
