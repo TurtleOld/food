@@ -10,6 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "whitenoise>=6.8,<7",
     "django-htmx>=1.29.0",
+    "django-tasks-db>=0.13,<0.14",
 ]
 
 [dependency-groups]
