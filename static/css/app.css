@@ -812,3 +812,42 @@ body:has(.login) {
   margin-left: 0.4rem;
   flex: none;
 }
+
+/* Минимальная лента Ассистента: полировка интерфейса — отдельный тикет. */
+.chat-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 46rem;
+}
+
+.chat-message p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message-user {
+  border-left: 3px solid var(--bulma-primary);
+  padding-left: 0.8rem;
+}
+
+.chat-message-assistant {
+  margin-top: 0.6rem;
+}
+
+.chat-error {
+  margin-top: 0.6rem;
+  color: var(--bulma-danger);
+}
+
+.chat-composer .label {
+  margin-bottom: 0.4rem;
+}
+
+.chat-composer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-top: 0.7rem;
+}

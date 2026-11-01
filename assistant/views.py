@@ -3,18 +3,26 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, TemplateView, UpdateView, View
 
 from assistant.budget import month_summary
-from assistant.forms import LLMSettingsForm, ProposalForm
-from assistant.models import LLMSettings, Proposal
+from assistant.chat import (
+    ChatError,
+    recover_stale_pending_turns,
+    recover_stale_running_turns,
+    start_turn,
+    turn_cards,
+)
+from assistant.forms import ChatMessageForm, LLMSettingsForm, ProposalForm
+from assistant.models import Conversation, LLMSettings, Proposal
 from assistant.proposals import (
     ProposalError,
     ProposalNotFound,
@@ -22,6 +30,9 @@ from assistant.proposals import (
     reject_proposal,
     update_pending_proposal,
 )
+from assistant.tasks import execute_turn_task
+from core.htmx import FragmentMixin, HtmxLoginRequiredMixin
+from core.jobs import enqueue_on_commit
 from core.models import Product
 
 
@@ -169,3 +180,61 @@ class ProposalRejectView(ProposalDecisionView):
 
     def decide(self, member: Any, proposal_id: int) -> Proposal:
         return reject_proposal(member, proposal_id)
+
+
+def _chat_context(member: Any, form: ChatMessageForm | None = None) -> dict[str, Any]:
+    """Лента человека и форма отправки; потерянные задачи ходов возвращаются в очередь."""
+    conversation = Conversation.for_member(member)
+    recover_stale_running_turns(conversation)
+    for turn_id in recover_stale_pending_turns(conversation):
+        enqueue_on_commit(execute_turn_task, turn_id)
+    cards = turn_cards(conversation)
+    return {
+        "cards": cards,
+        "active": any(card.turn.is_active for card in cards),
+        "form": form or ChatMessageForm(),
+        "photo_max_mb": max(1, settings.ASSISTANT_PHOTO_MAX_BYTES // (1024 * 1024)),
+    }
+
+
+class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
+    """Личная лента Ассистента; htmx опрашивает фрагмент `feed`, пока ход не готов."""
+
+    template_name = "assistant/chat.html"
+    fragment_template_name = "assistant/chat.html#feed"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context.update(_chat_context(self.request.user))
+        return context
+
+
+def _chat_response(request: HttpRequest, form: ChatMessageForm | None = None) -> HttpResponse:
+    """Полная страница ленты или её фрагмент для htmx."""
+    template = "assistant/chat.html#feed" if request.htmx else "assistant/chat.html"  # type: ignore[attr-defined]
+    return render(request, template, _chat_context(request.user, form))
+
+
+class ChatSendView(HtmxLoginRequiredMixin, View):
+    """Создаёт ход и ставит его задачу в очередь после коммита; повтор не даёт дубль."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        form = ChatMessageForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return _chat_response(request, form)
+        try:
+            started = start_turn(
+                request.user,
+                text=form.cleaned_data["text"],
+                photo=form.cleaned_data.get("photo"),
+            )
+        except ChatError as error:
+            form.add_error(None, str(error))
+            return _chat_response(request, form)
+        if started.created:
+            enqueue_on_commit(execute_turn_task, started.turn.pk)
+        if request.htmx:  # type: ignore[attr-defined]
+            return _chat_response(request)
+        return redirect("assistant:chat")

@@ -1,4 +1,4 @@
-"""Настройки провайдера, резервы бюджета, история стоимости и Предложения."""
+"""Провайдер, бюджет, Предложения и личная лента Ассистента."""
 
 from decimal import Decimal
 from typing import Any
@@ -222,3 +222,108 @@ class UsageRecord(models.Model):
 
     def __str__(self) -> str:
         return f"{self.model}: {self.cost_rub} ₽"
+
+
+class Conversation(models.Model):
+    """Одна непрерывная личная лента Ассистента на Члена семьи.
+
+    История хранится в БД и не сбрасывается; второй ленты у человека нет.
+    """
+
+    member = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="conversation",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"Лента {self.member_id}"
+
+    @classmethod
+    def for_member(cls, member: Any) -> "Conversation":
+        """Возвращает ленту человека, создавая её при первом обращении.
+
+        `get_or_create` переживает одновременный первый вход: уникальный ключ
+        не даёт создать вторую ленту, а проигравший получает уже созданную.
+        """
+        conversation, _ = cls.objects.get_or_create(member=member)
+        return conversation
+
+
+class Turn(models.Model):
+    """Один ход Ассистента: запрос человека, фоновая задача и её исход.
+
+    Ход создаётся в состоянии «ожидает» и выполняется воркером. Незавершённый ход
+    с тем же запросом переиспользуется, поэтому повторная отправка не создаёт дубль;
+    завершённый ход повторить можно осознанно — это новый ход.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Ожидает"
+        RUNNING = "running", "Выполняется"
+        SUCCEEDED = "succeeded", "Готов"
+        FAILED = "failed", "Ошибка"
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="turns",
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    request_text = models.TextField(blank=True)
+    request_dedupe_key = models.CharField(max_length=64)
+    recovery_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    cost_rub = models.DecimalField(max_digits=12, decimal_places=6, default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "request_dedupe_key"],
+                condition=models.Q(status__in=["pending", "running"]),
+                name="assistant_active_turn_unique",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Ход {self.pk}: {self.get_status_display()}"
+
+    @property
+    def is_active(self) -> bool:
+        return self.status in {self.Status.PENDING, self.Status.RUNNING}
+
+
+class Message(models.Model):
+    """Сообщение личной ленты; фото есть только у сообщения человека.
+
+    Байты фото лежат в БД только до конца хода: web и воркер — разные контейнеры
+    с разными файловыми системами, а общая БД доступна обоим. `has_image`
+    переживает очистку, чтобы лента помнила, что фото было.
+    """
+
+    class Role(models.TextChoices):
+        USER = "user", "Человек"
+        ASSISTANT = "assistant", "Ассистент"
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    turn = models.ForeignKey(Turn, on_delete=models.CASCADE, related_name="messages")
+    role = models.CharField(max_length=10, choices=Role.choices)
+    text = models.TextField(blank=True)
+    photo = models.BinaryField(null=True, blank=True, editable=False)
+    has_image = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.get_role_display()}: {self.text[:40]}"

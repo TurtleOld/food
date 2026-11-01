@@ -1,8 +1,10 @@
 from typing import Any, cast
 
 from django import forms
+from django.conf import settings
 
 from assistant.models import LLMSettings, Proposal
+from assistant.photos import PhotoError, prepare_photo
 from core.forms import DayField, day_widget
 from core.models import DiaryEntry, Product
 from core.nutrition import NUTRITION_FIELDS
@@ -176,4 +178,42 @@ class ProposalForm(forms.ModelForm):
             cleaned_data["new_base_unit"] = ""
             for name in NUTRITION_FIELDS:
                 cleaned_data[f"new_{name}"] = None
+        return cleaned_data
+
+
+class ChatMessageForm(forms.Form):
+    """Сообщение Ассистенту: текст и необязательное фото; одно из двух обязательно.
+
+    Проверка фото живёт в `assistant.photos`: форма показывает её ошибку до
+    создания хода, а ход получает уже перекодированный JPEG.
+    """
+
+    text = forms.CharField(
+        required=False,
+        max_length=settings.ASSISTANT_MESSAGE_MAX_CHARS,
+        label="Сообщение",
+        widget=forms.Textarea(
+            attrs={
+                "class": "input",
+                "rows": 2,
+                "placeholder": "Спросите про КБЖУ или добавьте запись…",
+            }
+        ),
+    )
+    photo = forms.FileField(required=False, label="Фото")
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            return cleaned_data
+        text = str(cleaned_data.get("text") or "").strip()
+        cleaned_data["text"] = text
+        photo = cleaned_data.get("photo")
+        if not text and not photo:
+            self.add_error(None, "Введите сообщение или приложите фото")
+        if photo:
+            try:
+                cleaned_data["photo"] = prepare_photo(photo)
+            except PhotoError as error:
+                self.add_error("photo", str(error))
         return cleaned_data
