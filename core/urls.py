@@ -35,6 +35,7 @@ urlpatterns = [
     path("entries/<int:pk>/delete/", views.EntryDeleteView.as_view(), name="entry_delete"),
     path("undo/", views.UndoView.as_view(), name="undo"),
     path("target/", views.DailyTargetUpdateView.as_view(), name="daily_target_edit"),
+    path("profile/", views.ProfileView.as_view(), name="profile"),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("healthz", views.HealthzView.as_view(), name="healthz"),
