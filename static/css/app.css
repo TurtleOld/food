@@ -407,6 +407,12 @@ body {
   color: var(--bulma-text-strong);
 }
 
+.meal-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 @media (min-width: 1024px) {
   .feed-block {
     display: contents;
