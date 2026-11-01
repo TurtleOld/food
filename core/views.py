@@ -947,7 +947,7 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
         except ProtectedError:
             messages.error(
                 self.request,
-                "Продукт нельзя удалить: на него ссылаются записи дневника",
+                "Продукт нельзя удалить: на него ссылаются записи дневника или предложения",
             )
             return redirect(self.success_url)
         messages.success(self.request, "Продукт удалён")
@@ -961,7 +961,14 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
             response["HX-Reswap"] = "none"
             return with_toasts(response, self.request)
         token = product_deletion_token(product, self.request.user)
-        product.delete()
+        try:
+            product.delete()
+        except ProtectedError:
+            # На Продукт может ссылаться Предложение, а не только Запись дневника.
+            messages.error(self.request, "Удалить нельзя — продукт используется")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         add_undo_message(self.request, "Продукт удалён", token)
         return sheet_saved_response(
             self.request, "core/product_list.html#catalog", _catalog_context(), "#catalog"
