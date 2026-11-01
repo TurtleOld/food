@@ -114,7 +114,7 @@ class ProposalUpdateView(LoginRequiredMixin, UpdateView):
     def get_initial(self) -> dict[str, Any]:
         initial = super().get_initial()
         product_id = self.request.GET.get("product")
-        if product_id:
+        if product_id and self.object.kind == Proposal.Kind.ENTRY:
             try:
                 product = Product.objects.filter(pk=product_id).first()
             except (TypeError, ValueError):

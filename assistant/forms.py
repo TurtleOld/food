@@ -101,6 +101,7 @@ class ProposalForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.product_only = self.instance.kind == Proposal.Kind.PRODUCT
         cast(forms.ModelChoiceField, self.fields["product"]).queryset = Product.objects.order_by(
             "name"
         )
@@ -114,9 +115,18 @@ class ProposalForm(forms.ModelForm):
             self.fields[f"new_{name}"].widget.attrs.update(
                 {"class": "input num", "step": "0.1", "min": "0", "inputmode": "decimal"}
             )
+        if self.product_only:
+            # У Предложения Продукта нет Записи: поля дня и количества скрыты.
+            for name in ("product", "amount", "date", "meal_type"):
+                self.fields[name].required = False
+                self.fields[name].widget = forms.HiddenInput()
 
     def clean_amount(self) -> Any:
-        amount = self.cleaned_data["amount"]
+        if self.product_only:
+            return None
+        amount = self.cleaned_data.get("amount")
+        if amount is None:
+            return None
         if amount <= 0:
             raise forms.ValidationError("Количество должно быть больше нуля")
         if amount > DiaryEntry.MAX_AMOUNT:
@@ -125,24 +135,41 @@ class ProposalForm(forms.ModelForm):
             )
         return amount
 
+    def _clean_new_product(self, cleaned_data: dict[str, Any]) -> None:
+        new_name = str(cleaned_data.get("new_name") or "").strip()
+        if not new_name:
+            self.add_error("new_name", "Укажите название нового Продукта")
+        else:
+            cleaned_data["new_name"] = new_name
+        if cleaned_data.get("new_base_unit") not in Product.BaseUnit.values:
+            self.add_error("new_base_unit", "Выберите граммы или миллилитры")
+        for name in NUTRITION_FIELDS:
+            value = cleaned_data.get(f"new_{name}")
+            if value is None:
+                self.add_error(f"new_{name}", "Заполните КБЖУ нового Продукта")
+            elif value < 0:
+                self.add_error(f"new_{name}", "Значение не может быть отрицательным")
+
     def clean(self) -> dict[str, Any] | None:
         cleaned_data = super().clean()
         if cleaned_data is None:
             return cleaned_data
+        if self.product_only:
+            cleaned_data["product"] = None
+            cleaned_data["amount"] = None
+            cleaned_data["date"] = None
+            cleaned_data["meal_type"] = ""
+            self._clean_new_product(cleaned_data)
+            return cleaned_data
+
+        if cleaned_data.get("amount") is None:
+            self.add_error("amount", "Укажите количество")
+        if cleaned_data.get("date") is None:
+            self.add_error("date", "Укажите дату")
+        if not cleaned_data.get("meal_type"):
+            self.add_error("meal_type", "Выберите Приём пищи")
         if cleaned_data.get("product") is None:
-            new_name = str(cleaned_data.get("new_name") or "").strip()
-            if not new_name:
-                self.add_error("new_name", "Укажите название нового Продукта")
-            else:
-                cleaned_data["new_name"] = new_name
-            if cleaned_data.get("new_base_unit") not in Product.BaseUnit.values:
-                self.add_error("new_base_unit", "Выберите граммы или миллилитры")
-            for name in NUTRITION_FIELDS:
-                value = cleaned_data.get(f"new_{name}")
-                if value is None:
-                    self.add_error(f"new_{name}", "Заполните КБЖУ нового Продукта")
-                elif value < 0:
-                    self.add_error(f"new_{name}", "Значение не может быть отрицательным")
+            self._clean_new_product(cleaned_data)
         else:
             # Выбран существующий Продукт: недописанные поля нового Продукта не сохраняем.
             cleaned_data["new_name"] = ""

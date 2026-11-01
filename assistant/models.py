@@ -131,10 +131,11 @@ class BudgetReservation(models.Model):
 
 
 class Proposal(models.Model):
-    """Подготовленная Ассистентом Запись: с существующим или ещё не созданным Продуктом.
+    """Подготовленное Ассистентом Предложение: новая Запись и/или новый Продукт.
 
     Хранится до решения Члена семьи и сама ничего не меняет. Подтверждение один раз
     создаёт Запись и, если Продукт новый, сам Продукт; отклонение данных не создаёт.
+    Предложение Продукта только добавляет Продукт в Каталог, без Записи.
     """
 
     class Status(models.TextChoices):
@@ -142,15 +143,20 @@ class Proposal(models.Model):
         CONFIRMED = "confirmed", "Подтверждено"
         REJECTED = "rejected", "Отклонено"
 
+    class Kind(models.TextChoices):
+        ENTRY = "entry", "Запись"
+        PRODUCT = "product", "Продукт"
+
     member = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="proposals",
     )
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.ENTRY)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
-    date = models.DateField()
-    meal_type = models.CharField(max_length=20, choices=DiaryEntry.MealType.choices)
-    amount = models.DecimalField(max_digits=7, decimal_places=1)
+    date = models.DateField(null=True, blank=True)
+    meal_type = models.CharField(max_length=20, choices=DiaryEntry.MealType.choices, blank=True)
+    amount = models.DecimalField(max_digits=7, decimal_places=1, null=True, blank=True)
     product = models.ForeignKey(
         Product,
         null=True,

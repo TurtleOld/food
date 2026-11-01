@@ -28,12 +28,20 @@ class ToolsSchemaTest(TestCase):
 
         self.assertEqual(
             set(functions),
-            {"search_catalog", "lookup_barcode", "read_diary", "read_profile", "propose_entry"},
+            {
+                "search_catalog",
+                "lookup_barcode",
+                "read_diary",
+                "read_profile",
+                "propose_product",
+                "propose_entry",
+            },
         )
         for function in functions.values():
             self.assertTrue(function["description"])
             self.assertEqual(function["parameters"]["type"], "object")
         self.assertEqual(functions["propose_entry"]["parameters"]["required"], ["amount"])
+        self.assertEqual(functions["propose_product"]["parameters"]["required"], ["new_product"])
 
 
 class DispatchTest(TestCase):
@@ -52,6 +60,17 @@ class DispatchTest(TestCase):
         self.assertIn(
             "error", dispatch_tool(self.member, "read_diary", {"date": "2026-01-01", "x": 1})
         )
+
+    def test_member_argument_missing_required_and_unknown_args_are_rejected(self):
+        injected = dispatch_tool(
+            self.member, "read_diary", {"member": self.member.pk, "date": "2026-01-01"}
+        )
+        missing = dispatch_tool(self.member, "read_diary", {})
+        missing_product = dispatch_tool(self.member, "propose_product", {})
+
+        for result in (injected, missing, missing_product):
+            self.assertIn("error", result)
+            self.assertIn("Неверные аргументы", result["error"])
 
     def test_empty_arguments_are_a_mapping(self):
         self.assertIn("target", dispatch_tool(self.member, "read_profile"))
@@ -378,4 +397,128 @@ class ProposeEntryToolTest(TestCase):
         )
 
         self.assertIn("error", result)
+        self.assertEqual(Proposal.objects.count(), 0)
+
+    def test_bad_amount_date_meal_product_and_new_product_are_errors(self):
+        good_new = {
+            "name": "Печенье",
+            "base_unit": "g",
+            "calories": 420,
+            "proteins": 7.5,
+            "fats": 16,
+            "carbs": 63,
+        }
+        cases = [
+            {"product_id": 999999, **PROPOSAL},
+            {**PROPOSAL, "product_id": self.product.pk, "amount": "0"},
+            {**PROPOSAL, "product_id": self.product.pk, "amount": "abc"},
+            {**PROPOSAL, "product_id": self.product.pk, "date": "31.10.2026"},
+            {**PROPOSAL, "product_id": self.product.pk, "meal_type": "supper"},
+            {**PROPOSAL, "product_id": self.product.pk, "new_product": good_new},
+            {**PROPOSAL},
+            {**PROPOSAL, "new_product": {**good_new, "base_unit": "kg"}},
+            {**PROPOSAL, "new_product": {**good_new, "calories": -1}},
+        ]
+        for args in cases:
+            with self.subTest(args=args):
+                result = dispatch_tool(self.member, "propose_entry", args)
+
+                self.assertIn("error", result)
+                self.assertEqual(Proposal.objects.count(), 0)
+
+
+class ProposeProductToolTest(TestCase):
+    def setUp(self):
+        self.member = User.objects.create_user(username="alice", password="s3cret-pass")
+
+    def test_product_proposal_has_no_diary_entry_or_date(self):
+        products_before = Product.objects.count()
+
+        result = dispatch_tool(
+            self.member,
+            "propose_product",
+            {
+                "new_product": {
+                    "name": "Молоко 3.2% обезжиренное",
+                    "base_unit": "ml",
+                    "calories": 35,
+                    "proteins": 3,
+                    "fats": 1,
+                    "carbs": 4.7,
+                }
+            },
+        )
+
+        self.assertEqual(result["proposal"]["kind"], Proposal.Kind.PRODUCT)
+        self.assertNotIn("date", result["proposal"])
+        self.assertEqual([item["name"] for item in result["similar"]], ["Молоко 3.2%"])
+        proposal = Proposal.objects.get()
+        self.assertEqual(proposal.kind, Proposal.Kind.PRODUCT)
+        self.assertIsNone(proposal.date)
+        self.assertIsNone(proposal.amount)
+        self.assertEqual(proposal.meal_type, "")
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+        self.assertEqual(Product.objects.count(), products_before)
+
+    def test_product_proposal_requires_new_product_data(self):
+        result = dispatch_tool(self.member, "propose_product", {"new_product": {"name": "X"}})
+
+        self.assertIn("error", result)
+        self.assertEqual(Proposal.objects.count(), 0)
+
+    def test_similar_products_are_limited_to_five(self):
+        Product.objects.bulk_create(
+            Product(
+                name=f"Похожий продукт {index}",
+                base_unit="g",
+                calories=Decimal("100"),
+                proteins=Decimal("1"),
+                fats=Decimal("1"),
+                carbs=Decimal("1"),
+                author=self.member,
+            )
+            for index in range(6)
+        )
+
+        result = dispatch_tool(
+            self.member,
+            "propose_product",
+            {
+                "new_product": {
+                    "name": "Похожий продукт",
+                    "base_unit": "g",
+                    "calories": 100,
+                    "proteins": 1,
+                    "fats": 1,
+                    "carbs": 1,
+                }
+            },
+        )
+
+        self.assertEqual(len(result["similar"]), 5)
+
+    def test_huge_numbers_are_domain_errors_not_crashes(self):
+        product = Product.objects.get(name="Молоко 3.2%")
+        huge_entry = dispatch_tool(
+            self.member,
+            "propose_entry",
+            {"product_id": product.pk, **PROPOSAL, "amount": "1e1000"},
+        )
+        huge_nutrition = dispatch_tool(
+            self.member,
+            "propose_product",
+            {
+                "new_product": {
+                    "name": "Огромный продукт",
+                    "base_unit": "g",
+                    "calories": "1e1000",
+                    "proteins": 1,
+                    "fats": 1,
+                    "carbs": 1,
+                }
+            },
+        )
+
+        self.assertIn("error", huge_entry)
+        self.assertIn("error", huge_nutrition)
         self.assertEqual(Proposal.objects.count(), 0)

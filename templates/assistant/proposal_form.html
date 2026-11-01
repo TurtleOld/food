@@ -4,7 +4,9 @@
 
 {% block content %}
   <div class="page-head">
-    <h1 class="title is-3">Правка предложения</h1>
+    <h1 class="title is-3">
+      {% if proposal.kind == "product" %}Правка Предложения Продукта{% else %}Правка Предложения Записи{% endif %}
+    </h1>
   </div>
 
   <form method="post" class="box">

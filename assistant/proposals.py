@@ -1,7 +1,7 @@
 """Жизненный цикл Предложения: подготовка, сопоставление с Каталогом, решение.
 
 Предложение ничего не меняет до подтверждения. Подтверждение атомарно создаёт
-Запись дневника и, если Продукт новый, сам Продукт; повтор безопасен.
+Запись дневника и/или новый Продукт; повтор безопасен.
 """
 
 import datetime
@@ -29,6 +29,23 @@ class ProposalDecided(ProposalError):
 
 MAX_NUTRITION = Decimal("1000000")
 
+PRODUCT_EDITABLE_FIELDS = (
+    "new_name",
+    "new_base_unit",
+    "new_calories",
+    "new_proteins",
+    "new_fats",
+    "new_carbs",
+)
+
+ENTRY_EDITABLE_FIELDS = (
+    "product",
+    *PRODUCT_EDITABLE_FIELDS,
+    "amount",
+    "date",
+    "meal_type",
+)
+
 
 def similar_products(name: str, limit: int = 5) -> list[Product]:
     """Похожие Продукты Каталога для выбора; ничего не создаёт и не меняет."""
@@ -54,8 +71,13 @@ def _decimal(value: Any, *, field: str, positive: bool = False) -> Decimal:
         raise ProposalError(f"{field}: ожидается число") from error
     if not number.is_finite() or number < 0:
         raise ProposalError(f"{field}: ожидается неотрицательное число")
+    if number >= MAX_NUTRITION:
+        raise ProposalError(f"{field}: значение слишком большое")
     # Поля хранят один знак после запятой; проверяем уже округлённое значение.
-    number = number.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    try:
+        number = number.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    except InvalidOperation as error:
+        raise ProposalError(f"{field}: значение слишком большое") from error
     if positive and number == 0:
         raise ProposalError(f"{field}: значение должно быть больше нуля")
     if number >= MAX_NUTRITION:
@@ -124,6 +146,19 @@ def _new_product(values: Any) -> dict[str, Any]:
     }
 
 
+def _product_from_proposal(proposal: Proposal, member: Any) -> Product:
+    """Создаёт новый Продукт из полей Предложения; автор — подтвердивший."""
+    return Product.objects.create(
+        name=proposal.new_name,
+        base_unit=proposal.new_base_unit,
+        calories=_stored(proposal.new_calories),
+        proteins=_stored(proposal.new_proteins),
+        fats=_stored(proposal.new_fats),
+        carbs=_stored(proposal.new_carbs),
+        author=member,
+    )
+
+
 def create_proposal(
     member: Any,
     *,
@@ -163,6 +198,7 @@ def create_proposal(
         new_fields = _new_product(new_product)
     return Proposal.objects.create(
         member=member,
+        kind=Proposal.Kind.ENTRY,
         date=_date(date),
         meal_type=_meal(meal_type),
         amount=_amount(amount),
@@ -171,18 +207,13 @@ def create_proposal(
     )
 
 
-EDITABLE_FIELDS = (
-    "product",
-    "new_name",
-    "new_base_unit",
-    "new_calories",
-    "new_proteins",
-    "new_fats",
-    "new_carbs",
-    "amount",
-    "date",
-    "meal_type",
-)
+def create_product_proposal(member: Any, *, new_product: Any) -> Proposal:
+    """Создаёт Предложение нового Продукта без Записи дневника; Каталог не меняет."""
+    return Proposal.objects.create(
+        member=member,
+        kind=Proposal.Kind.PRODUCT,
+        **_new_product(new_product),
+    )
 
 
 def update_pending_proposal(member: Any, proposal_id: int, values: dict[str, Any]) -> Proposal:
@@ -202,18 +233,24 @@ def update_pending_proposal(member: Any, proposal_id: int, values: dict[str, Any
         )
         if proposal is None:
             raise ProposalNotFound("Предложение не найдено или уже решено")
-        for field in EDITABLE_FIELDS:
+        fields = (
+            PRODUCT_EDITABLE_FIELDS
+            if proposal.kind == Proposal.Kind.PRODUCT
+            else ENTRY_EDITABLE_FIELDS
+        )
+        for field in fields:
             setattr(proposal, field, values[field])
-        proposal.save(update_fields=list(EDITABLE_FIELDS))
+        proposal.save(update_fields=list(fields))
         return proposal
 
 
 def confirm_proposal(member: Any, proposal_id: int) -> Proposal:
-    """Подтверждает Предложение один раз: создаёт Запись и новый Продукт атомарно.
+    """Подтверждает Предложение один раз: создаёт Запись и/или новый Продукт атомарно.
 
     Raises:
         ProposalNotFound: Предложения нет у этого Члена семьи.
         ProposalDecided: Предложение уже отклонено — данные не создаются.
+        ProposalError: у Предложения не хватает полей для создания данных.
     """
     with transaction.atomic():
         proposal = (
@@ -226,17 +263,19 @@ def confirm_proposal(member: Any, proposal_id: int) -> Proposal:
         if proposal.status == Proposal.Status.REJECTED:
             raise ProposalDecided("Предложение уже отклонено")
 
+        if proposal.kind == Proposal.Kind.PRODUCT:
+            created = _product_from_proposal(proposal, member)
+            proposal.product = created
+            proposal.status = Proposal.Status.CONFIRMED
+            proposal.decided_at = timezone.now()
+            proposal.save(update_fields=["product", "status", "decided_at"])
+            return proposal
+
         product = proposal.product
         if product is None:
-            product = Product.objects.create(
-                name=proposal.new_name,
-                base_unit=proposal.new_base_unit,
-                calories=_stored(proposal.new_calories),
-                proteins=_stored(proposal.new_proteins),
-                fats=_stored(proposal.new_fats),
-                carbs=_stored(proposal.new_carbs),
-                author=member,
-            )
+            product = _product_from_proposal(proposal, member)
+        if proposal.date is None or proposal.amount is None or not proposal.meal_type:
+            raise ProposalError("У Предложения не хватает даты, количества или Приёма пищи")
         entry = DiaryEntry.objects.create(
             member=member,
             date=proposal.date,

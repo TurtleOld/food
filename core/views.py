@@ -38,6 +38,7 @@ from core.catalog import (
     bind_barcode,
     catalog_products,
     entries_count,
+    proposals_count,
     search_by_code,
     search_catalog,
     unbind_barcode,
@@ -903,6 +904,7 @@ class ProductUpdateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CatalogSheetMix
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context["usage"] = entries_count(self.object)
+        context["proposal_usage"] = proposals_count(self.object)
         return context
 
 
@@ -960,11 +962,16 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
             response = HttpResponse()
             response["HX-Reswap"] = "none"
             return with_toasts(response, self.request)
+        if proposals_count(product):
+            messages.error(self.request, "Удалить нельзя — продукт используется в предложении")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         token = product_deletion_token(product, self.request.user)
         try:
             product.delete()
         except ProtectedError:
-            # На Продукт может ссылаться Предложение, а не только Запись дневника.
+            # Между проверкой и удалением могла появиться новая ссылка.
             messages.error(self.request, "Удалить нельзя — продукт используется")
             response = HttpResponse()
             response["HX-Reswap"] = "none"

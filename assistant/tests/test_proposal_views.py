@@ -1,11 +1,13 @@
+import datetime
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
 from assistant.models import Proposal
-from assistant.proposals import create_proposal
+from assistant.proposals import create_product_proposal, create_proposal
 from core.models import DiaryEntry, Product
 
 User = get_user_model()
@@ -36,6 +38,9 @@ class ProposalViewsTest(TestCase):
         }
         values.update(overrides)
         return create_proposal(member or self.member, **values)
+
+    def _product_proposal(self, member=None):
+        return create_product_proposal(member or self.member, new_product=NEW_PRODUCT)
 
     def test_list_requires_login(self):
         self.client.logout()
@@ -201,6 +206,40 @@ class ProposalViewsTest(TestCase):
         self.assertEqual(entry.product, product)
         self.assertEqual(entry.amount, Decimal("150.0"))
 
+    def test_confirm_new_product_rolls_back_product_when_entry_creation_fails(self):
+        proposal = self._proposal(product_id=None, new_product=NEW_PRODUCT)
+
+        with (
+            mock.patch.object(DiaryEntry.objects, "create", side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(reverse("assistant:proposal_confirm", args=[proposal.pk]))
+
+        self.assertFalse(Product.objects.filter(name="Печенье овсяное").exists())
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, Proposal.Status.PENDING)
+
+    def test_confirm_corrupt_new_product_shows_error_without_data(self):
+        proposal = Proposal.objects.create(
+            member=self.member,
+            date=datetime.date(2026, 10, 31),
+            meal_type=DiaryEntry.MealType.LUNCH,
+            amount=Decimal("100"),
+            new_name="Неполный продукт",
+            new_base_unit="g",
+        )
+
+        response = self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]), follow=True
+        )
+
+        self.assertContains(response, "не хватает КБЖУ")
+        self.assertFalse(Product.objects.filter(name="Неполный продукт").exists())
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, Proposal.Status.PENDING)
+
     def test_reject_creates_nothing(self):
         proposal = self._proposal()
 
@@ -221,6 +260,71 @@ class ProposalViewsTest(TestCase):
 
         self.assertContains(response, "уже отклонено")
         self.assertEqual(DiaryEntry.objects.count(), 0)
+
+    def test_product_proposal_card_edit_and_confirmation_without_entry(self):
+        proposal = self._product_proposal()
+
+        listed = self.client.get(reverse("assistant:proposals"))
+        edit = self.client.get(reverse("assistant:proposal_edit", args=[proposal.pk]))
+        self.assertContains(listed, "Печенье овсяное")
+        self.assertContains(listed, "новый Продукт")
+        self.assertContains(edit, "Правка Предложения Продукта")
+        self.assertNotContains(edit, "Правка Предложения Записи")
+
+        edited = self.client.post(
+            reverse("assistant:proposal_edit", args=[proposal.pk]),
+            {
+                "new_name": "Печенье овсяное с изюмом",
+                "new_base_unit": "g",
+                "new_calories": "400",
+                "new_proteins": "8",
+                "new_fats": "14",
+                "new_carbs": "60",
+            },
+        )
+        self.assertRedirects(edited, reverse("assistant:proposals"))
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.new_name, "Печенье овсяное с изюмом")
+        self.assertIsNone(proposal.date)
+        self.assertIsNone(proposal.amount)
+        self.assertEqual(proposal.meal_type, "")
+
+        confirmed = self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]), follow=True
+        )
+        product = Product.objects.get(name="Печенье овсяное с изюмом")
+        proposal.refresh_from_db()
+        self.assertEqual(product.author, self.member)
+        self.assertEqual(proposal.status, Proposal.Status.CONFIRMED)
+        self.assertEqual(proposal.product, product)
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+        self.assertContains(confirmed, "Продукт добавлен в Каталог")
+
+        self.client.post(reverse("assistant:proposal_confirm", args=[proposal.pk]))
+        self.assertEqual(Product.objects.filter(name="Печенье овсяное с изюмом").count(), 1)
+
+    def test_reject_product_proposal_creates_nothing(self):
+        proposal = self._product_proposal()
+
+        response = self.client.post(reverse("assistant:proposal_reject", args=[proposal.pk]))
+
+        self.assertRedirects(response, reverse("assistant:proposals"))
+        proposal.refresh_from_db()
+        self.assertEqual(proposal.status, Proposal.Status.REJECTED)
+        self.assertFalse(Product.objects.filter(name="Печенье овсяное").exists())
+        self.assertEqual(DiaryEntry.objects.count(), 0)
+
+    def test_confirmed_product_proposal_is_visible_in_catalog_delete_guard(self):
+        proposal = self._product_proposal()
+        self.client.post(reverse("assistant:proposal_confirm", args=[proposal.pk]))
+        product = Product.objects.get(name="Печенье овсяное")
+
+        response = self.client.get(
+            reverse("core:product_edit", args=[product.pk]), headers={"HX-Request": "true"}
+        )
+
+        self.assertContains(response, "используется в предложении")
+        self.assertNotContains(response, "Удалить продукт")
 
     def test_catalog_product_used_by_proposal_cannot_be_deleted_from_sheet(self):
         self._proposal()

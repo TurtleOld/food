@@ -13,7 +13,13 @@ from decimal import Decimal
 from types import ModuleType
 from typing import Any, Callable
 
-from assistant.proposals import ProposalError, create_proposal, similar_products
+from assistant.models import Proposal
+from assistant.proposals import (
+    ProposalError,
+    create_product_proposal,
+    create_proposal,
+    similar_products,
+)
 from core.barcodes import normalize_barcode
 from core.diary import search_products
 from core.models import Barcode, DailyTarget, DiaryEntry, Product
@@ -135,12 +141,27 @@ def _suggestion(member: Any) -> dict[str, Any] | None:
 def _proposal(proposal: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": proposal.pk,
+        "kind": proposal.kind,
         "status": proposal.status,
-        "date": proposal.date.isoformat(),
-        "meal_type": proposal.meal_type,
-        "meal_label": _MEAL_LABELS[proposal.meal_type],
-        "amount": str(proposal.amount),
     }
+    if proposal.kind == Proposal.Kind.PRODUCT:
+        payload["new_product"] = {
+            "name": proposal.new_name,
+            "base_unit": proposal.new_base_unit,
+            "calories": str(proposal.new_calories),
+            "proteins": str(proposal.new_proteins),
+            "fats": str(proposal.new_fats),
+            "carbs": str(proposal.new_carbs),
+        }
+        return payload
+    payload.update(
+        {
+            "date": proposal.date.isoformat(),
+            "meal_type": proposal.meal_type,
+            "meal_label": _MEAL_LABELS[proposal.meal_type],
+            "amount": str(proposal.amount),
+        }
+    )
     if proposal.product_id:
         payload["product"] = _product(proposal.product)
     else:
@@ -260,6 +281,15 @@ def _clarification(missing: list[str]) -> dict[str, Any]:
     return {"needs_clarification": True, "missing": missing, "question": " ".join(questions)}
 
 
+def propose_product(member: Any, new_product: Any) -> dict[str, Any]:
+    """Готовит Предложение нового Продукта для Каталога, без Записи дневника."""
+    proposal = create_product_proposal(member, new_product=new_product)
+    return {
+        "proposal": _proposal(proposal),
+        "similar": [_product(product) for product in similar_products(proposal.new_name)],
+    }
+
+
 def propose_entry(
     member: Any,
     amount: Any = None,
@@ -298,6 +328,7 @@ _HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
     "lookup_barcode": lookup_barcode,
     "read_diary": read_diary,
     "read_profile": read_profile,
+    "propose_product": propose_product,
     "propose_entry": propose_entry,
 }
 
@@ -337,9 +368,17 @@ def dispatch_tool(member: Any, name: str, arguments: Any = None) -> dict[str, An
         kwargs = _parse_arguments(arguments)
     except ToolArgumentError:
         return {"error": "Аргументы инструмента должны быть JSON-объектом"}
-    unknown = sorted(set(kwargs) - set(inspect.signature(handler).parameters))
-    if unknown:
-        return {"error": f"Лишние аргументы: {', '.join(unknown)}"}
+    signature = inspect.signature(handler)
+    try:
+        signature.bind(member, **kwargs)
+    except TypeError:
+        allowed = [name for name in signature.parameters if name != "member"]
+        return {
+            "error": (
+                f"Неверные аргументы инструмента «{name}». "
+                f"Допустимые: {', '.join(allowed) if allowed else '—'}."
+            )
+        }
     try:
         return handler(member, **kwargs)
     except ProposalError as error:
@@ -417,6 +456,12 @@ TOOLS: list[dict[str, Any]] = [
         "Прочитать Профиль, Суточную цель и предложение цели Члена семьи.",
         {},
         [],
+    ),
+    _function(
+        "propose_product",
+        ("Подготовить Предложение нового Продукта только для Каталога, без Записи дневника."),
+        {"new_product": _NEW_PRODUCT_SCHEMA},
+        ["new_product"],
     ),
     _function(
         "propose_entry",
