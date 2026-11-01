@@ -9,10 +9,12 @@
   <button class="button is-primary is-fullwidth mt-5" type="submit">{% if product %}Сохранить{% else %}Добавить в каталог{% endif %}</button>
 </form>
 {% if product %}
-  <p class="muted is-size-7 mt-4 has-text-centered">Добавил(а) {{ product.author.username }} · в {{ usage }} {{ usage|plural:"записи,записях,записях" }} дневника</p>
+  <p class="muted is-size-7 mt-4 has-text-centered">Добавил(а) {{ product.author.username }} · в {{ usage }} {{ usage|plural:"записи,записях,записях" }} дневника{% if proposal_usage %} · в {{ proposal_usage }} {{ proposal_usage|plural:"предложении,предложениях,предложениях" }}{% endif %}</p>
   <p class="mt-2 has-text-centered">
     {% if usage %}
       <span class="muted is-size-7">Удалить нельзя — продукт есть в записях дневника</span>
+    {% elif proposal_usage %}
+      <span class="muted is-size-7">Удалить нельзя — продукт используется в предложении</span>
     {% else %}
       <a class="has-text-danger" href="{% url 'core:product_delete' product.pk %}" hx-post="{% url 'core:product_delete' product.pk %}">Удалить продукт</a>
     {% endif %}

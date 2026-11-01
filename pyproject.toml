@@ -10,6 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "whitenoise>=6.8,<7",
     "django-htmx>=1.29.0",
+    "django-tasks-db>=0.13,<0.14",
 ]
 
 [dependency-groups]
@@ -55,12 +56,17 @@ module = "core.tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
+[[tool.mypy.overrides]]
+module = "assistant.tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 [tool.django-stubs]
 django_settings_module = "config.settings.dev"
 
 [tool.coverage.run]
 branch = true
-source = ["core", "config"]
+source = ["core", "config", "assistant"]
 omit = [
     "*/migrations/*",
     "*/tests/*",

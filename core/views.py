@@ -3,13 +3,16 @@ from __future__ import annotations
 import copy
 import datetime
 import json
-from typing import Any
+import secrets
+from decimal import Decimal
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
+from django.db import transaction
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
@@ -17,22 +20,25 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.urls import Resolver404, resolve, reverse, reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
 )
-from django_htmx.http import trigger_client_event
+from django_htmx.http import HttpResponseClientRedirect, trigger_client_event
 
 from core.barcodes import normalize_barcode
 from core.catalog import (
     bind_barcode,
     catalog_products,
     entries_count,
+    proposals_count,
     search_by_code,
     search_catalog,
     unbind_barcode,
@@ -40,7 +46,10 @@ from core.catalog import (
 from core.catalog import deletion_token as product_deletion_token
 from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
+    NothingToCopy,
     addition_token,
+    copy_diary,
+    copy_token,
     day_summary,
     deletion_token,
     draft_entry,
@@ -58,11 +67,15 @@ from core.diary import (
 )
 from core.forms import (
     DailyTargetForm,
+    DiaryCopyForm,
     DiaryEntryEditForm,
     DiaryEntryForm,
     DiaryEntrySheetForm,
     ProductCreateForm,
     ProductEditForm,
+    ProfileForm,
+    TargetAdjustmentForm,
+    WeightMeasurementForm,
 )
 from core.htmx import (
     FragmentMixin,
@@ -70,8 +83,17 @@ from core.htmx import (
     sheet_saved_response,
     with_toasts,
 )
-from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.models import (
+    Barcode,
+    DailyTarget,
+    DiaryCopyOperation,
+    DiaryEntry,
+    Product,
+    Profile,
+    WeightMeasurement,
+)
 from core.off import OffLookup, Outcome, lookup
+from core.profile import MIN_ADULT_AGE, bmi_value, latest_weight, target_suggestion
 from core.pwa import cache_name, precache_urls
 from core.undo import add_undo_message, restore
 
@@ -130,6 +152,131 @@ class DayView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
         current_date = _parse_date(date) if date is not None else datetime.date.today()
         context.update(_day_context(self.request.user, current_date))
         return context
+
+
+_COPY_TITLES: dict[str, tuple[str, str]] = {
+    DiaryCopyForm.Scope.DAY.value: (
+        "Копировать день",
+        "Все записи исходного дня добавятся в целевой.",
+    ),
+    DiaryCopyForm.Scope.MEAL.value: ("Повторить приём", "Записи приёма добавятся в целевой день."),
+    DiaryCopyForm.Scope.ENTRY.value: (
+        "Скопировать запись",
+        "Запись добавится в выбранный день и приём пищи.",
+    ),
+}
+
+
+class DiaryCopyView(HtmxLoginRequiredMixin, View):
+    """Копирует день, Приём пищи или одну Запись в любой день текущего участника."""
+
+    http_method_names = ["get", "post"]
+
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        super().setup(request, *args, **kwargs)
+        self.page_date = _parse_date(kwargs["date"])
+
+    def _scope(self, data: Any, *, strict: bool) -> tuple[str, str, DiaryEntry | None]:
+        """Разбирает вариант копирования из запроса; чужую Запись при `strict` не показывает."""
+        scope = data.get("scope")
+        entry_value = data.get("entry", "")
+        meal_value = data.get("meal") or data.get("meal_type") or ""
+        if scope == DiaryCopyForm.Scope.ENTRY or (scope is None and entry_value):
+            entry = (
+                DiaryEntry.objects.filter(member_id=self.request.user.pk, pk=_pk(entry_value))
+                .select_related("product")
+                .first()
+            )
+            if entry is None and strict:
+                raise Http404("Запись не найдена")
+            return DiaryCopyForm.Scope.ENTRY, "", entry
+        if scope == DiaryCopyForm.Scope.MEAL or (scope is None and meal_value):
+            meal = parse_meal(meal_value)
+            if not meal and strict:
+                raise Http404("Неверный приём пищи")
+            return DiaryCopyForm.Scope.MEAL, meal, None
+        return DiaryCopyForm.Scope.DAY, "", None
+
+    def _context(
+        self, form: DiaryCopyForm, scope: str, entry: DiaryEntry | None, meal: str
+    ) -> dict[str, Any]:
+        title, subtitle = _COPY_TITLES.get(scope, _COPY_TITLES[DiaryCopyForm.Scope.DAY.value])
+        if scope == DiaryCopyForm.Scope.MEAL and meal:
+            subtitle = f"Приём «{DiaryEntry.MealType(meal).label}» добавится в целевой день."
+        return {"form": form, "scope": scope, "title": title, "subtitle": subtitle, "entry": entry}
+
+    def _render(
+        self, form: DiaryCopyForm, scope: str, entry: DiaryEntry | None, meal: str
+    ) -> HttpResponse:
+        template = (
+            "core/copy_sheet.html#copy"
+            if self.request.htmx  # type: ignore[attr-defined]
+            else "core/copy_sheet.html"
+        )
+        return render(self.request, template, self._context(form, scope, entry, meal))
+
+    def _redirect(self, target: datetime.date) -> HttpResponse:
+        url = _day_url(target)
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return HttpResponseClientRedirect(url)
+        return redirect(url)
+
+    def get(self, request: HttpRequest, date: str) -> HttpResponse:
+        scope, meal, entry = self._scope(request.GET, strict=True)
+        form = DiaryCopyForm(
+            initial={
+                "scope": scope,
+                "source_date": entry.date if entry else self.page_date,
+                "target_date": timezone.localdate(),
+                "meal_type": meal,
+                "entry": entry.pk if entry else "",
+                "target_meal_type": entry.meal_type if entry else "",
+                "operation": secrets.token_urlsafe(16),
+            },
+            member=request.user,
+        )
+        return self._render(form, scope, entry, meal)
+
+    def post(self, request: HttpRequest, date: str) -> HttpResponse:
+        form = DiaryCopyForm(request.POST, member=request.user)
+        scope, meal, entry = self._scope(request.POST, strict=False)
+        if not form.is_valid():
+            return self._render(form, scope, entry, meal)
+        cleaned = form.cleaned_data
+        target: datetime.date = cleaned["target_date"]
+        operation: str = cleaned["operation"]
+        entries: list[DiaryEntry] = []
+        duplicate = False
+        try:
+            with transaction.atomic():
+                _, created = DiaryCopyOperation.objects.get_or_create(
+                    member_id=request.user.pk, key=operation
+                )
+                if created:
+                    entries = copy_diary(
+                        request.user,
+                        source_date=cleaned["source_date"],
+                        target_date=target,
+                        meal_type=cleaned.get("meal_type") or None,
+                        entry=cleaned.get("entry"),
+                        target_meal_type=cleaned.get("target_meal_type") or None,
+                    )
+                else:
+                    duplicate = True
+        except NothingToCopy:
+            empty_message = {
+                DiaryCopyForm.Scope.MEAL.value: "В выбранном приёме нет записей",
+                DiaryCopyForm.Scope.ENTRY.value: "Запись не найдена",
+            }.get(scope, "В исходном дне нет записей")
+            form.add_error(None, empty_message)
+            return self._render(form, scope, entry, meal)
+        if duplicate:
+            messages.info(request, "Это копирование уже выполнено")
+            return self._redirect(target)
+        add_undo_message(
+            request, f"Скопировано записей: {len(entries)}", copy_token(entries, target)
+        )
+        return self._redirect(target)
 
 
 class OwnEntryMixin(HtmxLoginRequiredMixin):
@@ -563,6 +710,84 @@ class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
         return context
 
 
+class ProfileView(HtmxLoginRequiredMixin, FormView):
+    """Профиль Члена семьи: антропометрия, Замеры веса, ИМТ и предложение цели.
+
+    Профиль и Замер сохраняются разными формами на одной странице. Расчёт цели —
+    только предложение: в Суточную цель он попадает после явной отправки формы.
+    """
+
+    form_class = ProfileForm
+    template_name = "core/profile.html"
+    success_url = reverse_lazy("core:profile")
+    weight_form: WeightMeasurementForm | None = None
+
+    def get_profile(self) -> Profile:
+        profile = Profile.objects.filter(member_id=self.request.user.pk).first()
+        return profile or Profile(member_id=cast(int, self.request.user.pk))
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.get_profile()
+        return kwargs
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        Profile.objects.update_or_create(
+            member_id=cast(int, self.request.user.pk),
+            defaults={
+                "height_cm": form.cleaned_data["height_cm"],
+                "birth_date": form.cleaned_data["birth_date"],
+                "sex": form.cleaned_data["sex"],
+                "activity": form.cleaned_data["activity"],
+            },
+        )
+        messages.success(self.request, "Профиль сохранён")
+        return super().form_valid(form)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if "weight_kg" in request.POST:
+            return self._post_weight(request)
+        return super().post(request, *args, **kwargs)
+
+    def _post_weight(self, request: HttpRequest) -> HttpResponse:
+        form = WeightMeasurementForm(request.POST)
+        if form.is_valid():
+            form.instance.member = self.request.user
+            form.save()
+            messages.success(request, "Замер веса добавлен")
+            return redirect("core:profile")
+        self.weight_form = form
+        return self.render_to_response(
+            self.get_context_data(form=ProfileForm(instance=self.get_profile()))
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        profile = self.get_profile()
+        today = timezone.localdate()
+        adjustment_form = TargetAdjustmentForm(self.request.GET or None)
+        adjustment = Decimal(0)
+        if adjustment_form.is_valid():
+            adjustment = adjustment_form.cleaned_data["adjustment"]
+        weight = latest_weight(self.request.user)
+        base_suggestion = target_suggestion(self.request.user)
+        suggestion = (
+            target_suggestion(self.request.user, adjustment) if adjustment else base_suggestion
+        )
+        context.update(
+            profile=profile,
+            is_adult=(profile.age_on(today) or 0) >= MIN_ADULT_AGE,
+            weight_form=self.weight_form or WeightMeasurementForm(initial={"date": today}),
+            measurements=WeightMeasurement.objects.filter(member_id=self.request.user.pk),
+            bmi=bmi_value(profile.height_cm, weight.weight_kg if weight else None),
+            adjustment_form=adjustment_form,
+            suggestion=suggestion,
+            adjustment_too_large=bool(adjustment and base_suggestion and suggestion is None),
+            target=DailyTarget.objects.filter(member_id=self.request.user.pk).first(),
+        )
+        return context
+
+
 class HealthzView(View):
     """Сообщает, что процесс приложения жив."""
 
@@ -679,6 +904,7 @@ class ProductUpdateView(HtmxLoginRequiredMixin, BarcodeAddMixin, CatalogSheetMix
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context["usage"] = entries_count(self.object)
+        context["proposal_usage"] = proposals_count(self.object)
         return context
 
 
@@ -723,7 +949,7 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
         except ProtectedError:
             messages.error(
                 self.request,
-                "Продукт нельзя удалить: на него ссылаются записи дневника",
+                "Продукт нельзя удалить: на него ссылаются записи дневника или предложения",
             )
             return redirect(self.success_url)
         messages.success(self.request, "Продукт удалён")
@@ -736,8 +962,20 @@ class ProductDeleteView(HtmxLoginRequiredMixin, DeleteView):
             response = HttpResponse()
             response["HX-Reswap"] = "none"
             return with_toasts(response, self.request)
+        if proposals_count(product):
+            messages.error(self.request, "Удалить нельзя — продукт используется в предложении")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         token = product_deletion_token(product, self.request.user)
-        product.delete()
+        try:
+            product.delete()
+        except ProtectedError:
+            # Между проверкой и удалением могла появиться новая ссылка.
+            messages.error(self.request, "Удалить нельзя — продукт используется")
+            response = HttpResponse()
+            response["HX-Reswap"] = "none"
+            return with_toasts(response, self.request)
         add_undo_message(self.request, "Продукт удалён", token)
         return sheet_saved_response(
             self.request, "core/product_list.html#catalog", _catalog_context(), "#catalog"

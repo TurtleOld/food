@@ -3,10 +3,11 @@
 import datetime
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
+from django.db import transaction
 
 from core.forms import DiaryEntrySheetForm
 from core.models import DailyTarget, DiaryEntry, Product
@@ -353,4 +354,79 @@ def _restore_added_entry(member: Member, payload: dict[str, str]) -> Restored:
     deleted, _ = DiaryEntry.objects.filter(pk=payload["entry"], member_id=member.pk).delete()
     if not deleted:
         raise CannotUndo
+    return Restored(datetime.date.fromisoformat(payload["date"]))
+
+
+class NothingToCopy(Exception):
+    """В выбранном исходном дне, приёме пищи или записи нечего копировать."""
+
+
+def copy_diary(
+    member: Member,
+    *,
+    source_date: datetime.date,
+    target_date: datetime.date,
+    meal_type: str | None = None,
+    entry: DiaryEntry | None = None,
+    target_meal_type: str | None = None,
+) -> list[DiaryEntry]:
+    """Добавляет записи в целевой день, сохраняя количества и беря свежие снапшоты.
+
+    Args:
+        member: участник, чей дневник копируется и кому принадлежат новые записи.
+        source_date: исходный день для копирования дня или приёма пищи.
+        target_date: день, в который добавляются записи.
+        meal_type: приём пищи для копирования одного приёма; ``None`` — весь день.
+        entry: конкретная запись для копирования; заменяет день и приём пищи.
+        target_meal_type: приём пищи новых записей; ``None`` — как у источника.
+
+    Returns:
+        Созданные записи в порядке исходных.
+
+    Raises:
+        NothingToCopy: у участника нет подходящих записей.
+    """
+    sources = DiaryEntry.objects.filter(member_id=member.pk).select_related("product")
+    if entry is not None:
+        sources = sources.filter(pk=entry.pk)
+    else:
+        sources = sources.filter(date=source_date)
+        if meal_type is not None:
+            sources = sources.filter(meal_type=meal_type)
+    source_entries = list(sources.order_by("created_at", "pk"))
+    if not source_entries:
+        raise NothingToCopy
+    with transaction.atomic():
+        return [
+            DiaryEntry.objects.create(
+                member_id=member.pk,  # type: ignore[misc]
+                date=target_date,
+                meal_type=target_meal_type or source.meal_type,
+                product=source.product,
+                amount=source.amount,
+            )
+            for source in source_entries
+        ]
+
+
+def copy_token(entries: list[DiaryEntry], target_date: datetime.date) -> str:
+    """Токен «Вернуть» для копирования: возврат удаляет все созданные записи."""
+    return make_token(
+        entries[0].member,
+        "entries_copied",
+        {"entries": [entry.pk for entry in entries], "date": target_date.isoformat()},
+    )
+
+
+@restorer("entries_copied")
+def _restore_copied_entries(member: Member, payload: dict[str, Any]) -> Restored:
+    with transaction.atomic():
+        entries = list(
+            DiaryEntry.objects.select_for_update().filter(
+                pk__in=payload["entries"], member_id=member.pk
+            )
+        )
+        if len(entries) != len(payload["entries"]):
+            raise CannotUndo
+        DiaryEntry.objects.filter(pk__in=[entry.pk for entry in entries]).delete()
     return Restored(datetime.date.fromisoformat(payload["date"]))

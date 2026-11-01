@@ -1,5 +1,13 @@
 # Production: the app plus a Traefik router. There is deliberately no database
 # container here — the app talks to an external Postgres through DATABASE_URL.
+x-app-environment: &app-environment
+  DJANGO_SETTINGS_MODULE: config.settings.prod
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+  PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${PUBLIC_HOST}}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://${PUBLIC_HOST}}
+
 services:
   web:
     build: .
@@ -8,13 +16,7 @@ services:
     env_file:
       - path: .env
         required: false
-    environment:
-      DJANGO_SETTINGS_MODULE: config.settings.prod
-      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
-      PUBLIC_HOST: ${PUBLIC_HOST:?Set PUBLIC_HOST in .env}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-${PUBLIC_HOST}}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://${PUBLIC_HOST}}
+    environment: *app-environment
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
@@ -25,7 +27,7 @@ services:
         - >-
           python -c "import sys, urllib.request;
           req = urllib.request.Request('http://127.0.0.1:8000/healthz',
-          headers={'X-Forwarded-Proto': 'https'});
+          headers={'X-Forwarded-Proto': 'https', 'Host': '${PUBLIC_HOST}'});
           sys.exit(0 if urllib.request.urlopen(req).status == 200 else 1)"
       interval: 15s
       timeout: 5s
@@ -43,6 +45,41 @@ services:
       # Shared middleware chain on the Traefik host; set TRAEFIK_MIDDLEWARES
       # to empty to drop it.
       traefik.http.routers.food.middlewares: "${TRAEFIK_MIDDLEWARES:-chain-public@file}"
+
+  # One durable queue in the same Postgres; no Redis or broker. Tasks whose
+  # worker is killed mid-run are returned to the queue by the scheduler's tick.
+  worker:
+    image: ${IMAGE:-food-web:latest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment: *app-environment
+    command: ["python", "manage.py", "db_worker", "--queue-name", "*"]
+    # A long Assistant turn must finish before Docker escalates to SIGKILL.
+    stop_grace_period: 2m
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - traefik-public
+
+  # One replica. The tick is idempotent and reads state from the database, so a
+  # missed or repeated run is harmless; no cron machinery in the image.
+  scheduler:
+    image: ${IMAGE:-food-web:latest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment: *app-environment
+    command: >
+      sh -c "while true; do python manage.py tick; sleep 300; done"
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - traefik-public
 
 networks:
   traefik-public:

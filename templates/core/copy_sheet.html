@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% partialdef copy inline %}
+    <div class="sheet-step">
+      <h2 class="title is-4 mb-1">{{ title }}</h2>
+      <p class="muted is-size-7 mb-4">{{ subtitle }}</p>
+      <form id="form" class="sheet-form" method="post" action="{{ request.path }}"
+            {% if request.htmx %}hx-post="{{ request.path }}" hx-target="#form" hx-swap="outerHTML"{% endif %}>
+        {% csrf_token %}
+        {{ form.scope }}
+        {{ form.entry }}
+        {{ form.meal_type }}
+        {{ form.operation }}
+        {{ form.non_field_errors }}
+        {% for error in form.entry.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+        {% for error in form.meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+        {% if scope != "entry" %}
+          <label class="field-day">
+            <span class="muted is-size-7">Исходный день</span>
+            {{ form.source_date }}
+          </label>
+          {% for error in form.source_date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+        {% endif %}
+
+        <label class="field-day">
+          <span class="muted is-size-7">Целевой день</span>
+          {{ form.target_date }}
+        </label>
+        {% for error in form.target_date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+        {% if scope == "entry" %}
+          <p class="muted is-size-7 mt-4 mb-2">Приём пищи в целевом дне</p>
+          <div class="chips" role="radiogroup" aria-label="Приём пищи">
+            {% for radio in form.target_meal_type %}
+              <label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+          {% for error in form.target_meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+        {% endif %}
+
+        <button class="button is-primary is-fullwidth mt-5" type="submit" hx-disabled-elt="this">Скопировать</button>
+      </form>
+    </div>
+  {% endpartialdef %}
+{% endblock %}

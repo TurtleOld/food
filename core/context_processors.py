@@ -7,7 +7,9 @@ _SECTION_BY_PREFIX = {
     "undo": "diary",
     "products": "products",
     "barcodes": "products",
+    "profile": "profile",
     "target": "target",
+    "assistant": "assistant",
 }
 
 
