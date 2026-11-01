@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Ассистент{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="title is-3">Ассистент</h1>
+    <div>
+      <a class="btn-quiet" href="{% url 'assistant:proposals' %}">Предложения</a>
+      <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
+    </div>
+  </div>
+
+  {% partialdef feed inline %}
+    <div id="feed" class="chat-feed">
+      {% for card in cards %}
+        <article class="box chat-turn">
+          {% if card.user %}
+            <div class="chat-message chat-message-user">
+              {% if card.user.text %}<p>{{ card.user.text|linebreaksbr }}</p>{% endif %}
+              {% if card.user.has_image %}
+                <p class="is-size-7 muted">
+                  Фото{% if not card.turn.is_active %} (удалено после ответа){% endif %}
+                </p>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if card.answer %}
+            <div class="chat-message chat-message-assistant">
+              <p>{{ card.answer.text|linebreaksbr }}</p>
+            </div>
+          {% elif card.turn.status == "failed" %}
+            <div class="chat-error">
+              <p>{{ card.turn.error_message|default:"Ход не удался. Попробуйте ещё раз." }}</p>
+              {% if card.turn.request_text %}
+                <form method="post" action="{% url 'assistant:chat_send' %}"
+                      hx-post="{% url 'assistant:chat_send' %}" hx-target="#feed" hx-swap="outerHTML">
+                  {% csrf_token %}
+                  <textarea name="text" hidden>{{ card.turn.request_text }}</textarea>
+                  <button class="btn-quiet" type="submit">Повторить</button>
+                </form>
+              {% else %}
+                <p class="is-size-7">Фото удалено: приложите его снова.</p>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="chat-message chat-message-assistant muted"
+                 hx-get="{% url 'assistant:chat' %}" hx-trigger="every 2s"
+                 hx-target="#feed" hx-swap="outerHTML" aria-live="polite">
+              Ассистент думает…
+            </div>
+          {% endif %}
+        </article>
+      {% empty %}
+        <p class="muted">Напишите Ассистенту о еде, КБЖУ или Профиле.</p>
+      {% endfor %}
+
+      <form class="box chat-composer" method="post" action="{% url 'assistant:chat_send' %}"
+            enctype="multipart/form-data"
+            hx-post="{% url 'assistant:chat_send' %}" hx-target="#feed" hx-swap="outerHTML">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          <div class="chat-error" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <label class="label" for="{{ form.text.id_for_label }}">{{ form.text.label }}</label>
+        {{ form.text }}
+        {% if form.text.errors %}<div class="chat-error" role="alert">{{ form.text.errors }}</div>{% endif %}
+        <div class="chat-composer-row">
+          <label class="is-size-7 muted" for="{{ form.photo.id_for_label }}">
+            Фото
+            <input type="file" name="photo" id="{{ form.photo.id_for_label }}"
+                   accept="image/jpeg,image/png,image/webp">
+          </label>
+          <button class="btn-main" type="submit"{% if active %} disabled{% endif %}>Отправить</button>
+        </div>
+        {% if form.photo.errors %}<div class="chat-error" role="alert">{{ form.photo.errors }}</div>{% endif %}
+        <p class="is-size-7 muted">
+          Фото до {{ photo_max_mb }} МБ; после ответа оно удаляется и дальше не хранится.
+        </p>
+      </form>
+    </div>
+  {% endpartialdef %}
+{% endblock %}
