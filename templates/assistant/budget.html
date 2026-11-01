@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Бюджет ассистента{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="title is-3">Бюджет ассистента</h1>
+    {% if can_edit %}
+      <a class="btn-quiet" href="{% url 'assistant:settings' %}">Настроить</a>
+    {% endif %}
+  </div>
+
+  {% if not summary.configured %}
+    <div class="box">
+      <p>Ассистент пока не настроен. Обращения к модели отключены.</p>
+      <p class="muted is-size-7 mt-2">
+        {% if can_edit %}
+          Укажите провайдера, тарифы и месячный бюджет в настройках.
+        {% else %}
+          Настройки задаёт администратор семьи.
+        {% endif %}
+      </p>
+    </div>
+  {% else %}
+    <div class="box">
+      <p class="muted">Общий бюджет семьи на месяц</p>
+      <p class="title is-3 num mb-4">{{ budget }} ₽</p>
+      <div class="level is-mobile">
+        <div>
+          <p class="muted is-size-7">Израсходовано</p>
+          <p class="num">{{ spent }} ₽</p>
+        </div>
+        {% if can_edit %}
+          <div>
+            <p class="muted is-size-7">Зарезервировано</p>
+            <p class="num">{{ reserved }} ₽</p>
+          </div>
+        {% endif %}
+        <div>
+          <p class="muted is-size-7">Осталось</p>
+          <p class="num"><b>{{ remaining }} ₽</b></p>
+        </div>
+      </div>
+      {% if summary.remaining <= 0 %}
+        <p class="has-text-danger mt-3">Бюджет исчерпан, новые обращения к модели недоступны.</p>
+      {% endif %}
+      <p class="muted is-size-7 mt-3">Расход считается по тарифам, действовавшим в момент запроса.</p>
+    </div>
+  {% endif %}
+{% endblock %}
