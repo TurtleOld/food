@@ -8,6 +8,7 @@ app_name = "core"
 urlpatterns = [
     path("", views.DayView.as_view(), name="day"),
     path("day/<str:date>/", views.DayView.as_view(), name="day_on"),
+    path("day/<str:date>/copy/", views.DiaryCopyView.as_view(), name="diary_copy"),
     path("day/<str:date>/entries/new/", views.EntryCreateView.as_view(), name="entry_create"),
     path("day/<str:date>/entries/search/", views.EntrySearchView.as_view(), name="entry_search"),
     path(

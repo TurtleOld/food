@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import datetime
 import json
+import secrets
 from decimal import Decimal
 from typing import Any, cast
 from urllib.parse import urlencode
@@ -29,7 +30,7 @@ from django.views.generic import (
     TemplateView,
     UpdateView,
 )
-from django_htmx.http import trigger_client_event
+from django_htmx.http import HttpResponseClientRedirect, trigger_client_event
 
 from core.barcodes import normalize_barcode
 from core.catalog import (
@@ -43,7 +44,10 @@ from core.catalog import (
 from core.catalog import deletion_token as product_deletion_token
 from core.catalog import unbind_token as barcode_unbind_token
 from core.diary import (
+    NothingToCopy,
     addition_token,
+    copy_diary,
+    copy_token,
     day_summary,
     deletion_token,
     draft_entry,
@@ -61,6 +65,7 @@ from core.diary import (
 )
 from core.forms import (
     DailyTargetForm,
+    DiaryCopyForm,
     DiaryEntryEditForm,
     DiaryEntryForm,
     DiaryEntrySheetForm,
@@ -137,6 +142,126 @@ class DayView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
         current_date = _parse_date(date) if date is not None else datetime.date.today()
         context.update(_day_context(self.request.user, current_date))
         return context
+
+
+_COPY_TITLES: dict[str, tuple[str, str]] = {
+    DiaryCopyForm.Scope.DAY.value: (
+        "Копировать день",
+        "Все записи исходного дня добавятся в целевой.",
+    ),
+    DiaryCopyForm.Scope.MEAL.value: ("Повторить приём", "Записи приёма добавятся в целевой день."),
+    DiaryCopyForm.Scope.ENTRY.value: (
+        "Скопировать запись",
+        "Запись добавится в выбранный день и приём пищи.",
+    ),
+}
+_COPY_MEMORY = "copy_operations"
+_COPY_MEMORY_SIZE = 20
+
+
+class DiaryCopyView(HtmxLoginRequiredMixin, View):
+    """Копирует день, Приём пищи или одну Запись в любой день текущего участника."""
+
+    http_method_names = ["get", "post"]
+
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        super().setup(request, *args, **kwargs)
+        self.page_date = _parse_date(kwargs["date"])
+
+    def _scope(self, data: Any, *, strict: bool) -> tuple[str, str, DiaryEntry | None]:
+        """Разбирает вариант копирования из запроса; чужую Запись при `strict` не показывает."""
+        scope = data.get("scope")
+        entry_value = data.get("entry", "")
+        meal_value = data.get("meal") or data.get("meal_type") or ""
+        if scope == DiaryCopyForm.Scope.ENTRY or (scope is None and entry_value):
+            entry = (
+                DiaryEntry.objects.filter(member_id=self.request.user.pk, pk=_pk(entry_value))
+                .select_related("product")
+                .first()
+            )
+            if entry is None and strict:
+                raise Http404("Запись не найдена")
+            return DiaryCopyForm.Scope.ENTRY, "", entry
+        if scope == DiaryCopyForm.Scope.MEAL or (scope is None and meal_value):
+            meal = parse_meal(meal_value)
+            if not meal and strict:
+                raise Http404("Неверный приём пищи")
+            return DiaryCopyForm.Scope.MEAL, meal, None
+        return DiaryCopyForm.Scope.DAY, "", None
+
+    def _context(
+        self, form: DiaryCopyForm, scope: str, entry: DiaryEntry | None, meal: str
+    ) -> dict[str, Any]:
+        title, subtitle = _COPY_TITLES.get(scope, _COPY_TITLES[DiaryCopyForm.Scope.DAY.value])
+        if scope == DiaryCopyForm.Scope.MEAL and meal:
+            subtitle = f"Приём «{DiaryEntry.MealType(meal).label}» добавится в целевой день."
+        return {"form": form, "scope": scope, "title": title, "subtitle": subtitle, "entry": entry}
+
+    def _render(
+        self, form: DiaryCopyForm, scope: str, entry: DiaryEntry | None, meal: str
+    ) -> HttpResponse:
+        template = (
+            "core/copy_sheet.html#copy"
+            if self.request.htmx  # type: ignore[attr-defined]
+            else "core/copy_sheet.html"
+        )
+        return render(self.request, template, self._context(form, scope, entry, meal))
+
+    def _redirect(self, target: datetime.date) -> HttpResponse:
+        url = _day_url(target)
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return HttpResponseClientRedirect(url)
+        return redirect(url)
+
+    def get(self, request: HttpRequest, date: str) -> HttpResponse:
+        scope, meal, entry = self._scope(request.GET, strict=True)
+        form = DiaryCopyForm(
+            initial={
+                "scope": scope,
+                "source_date": entry.date if entry else self.page_date,
+                "target_date": datetime.date.today(),
+                "meal_type": meal,
+                "entry": entry.pk if entry else "",
+                "target_meal_type": entry.meal_type if entry else "",
+                "operation": secrets.token_urlsafe(16),
+            },
+            member=request.user,
+        )
+        return self._render(form, scope, entry, meal)
+
+    def post(self, request: HttpRequest, date: str) -> HttpResponse:
+        form = DiaryCopyForm(request.POST, member=request.user)
+        scope, meal, entry = self._scope(request.POST, strict=False)
+        if not form.is_valid():
+            return self._render(form, scope, entry, meal)
+        cleaned = form.cleaned_data
+        target: datetime.date = cleaned["target_date"]
+        operation: str = cleaned["operation"]
+        used: list[str] = request.session.get(_COPY_MEMORY, [])
+        if operation in used:
+            messages.info(request, "Это копирование уже выполнено")
+            return self._redirect(target)
+        try:
+            entries = copy_diary(
+                request.user,
+                source_date=cleaned["source_date"],
+                target_date=target,
+                meal_type=cleaned.get("meal_type") or None,
+                entry=cleaned.get("entry"),
+                target_meal_type=cleaned.get("target_meal_type") or None,
+            )
+        except NothingToCopy:
+            empty_message = {
+                DiaryCopyForm.Scope.MEAL.value: "В выбранном приёме нет записей",
+                DiaryCopyForm.Scope.ENTRY.value: "Запись не найдена",
+            }.get(scope, "В исходном дне нет записей")
+            form.add_error(None, empty_message)
+            return self._render(form, scope, entry, meal)
+        request.session[_COPY_MEMORY] = [*used, operation][-_COPY_MEMORY_SIZE:]
+        add_undo_message(
+            request, f"Скопировано записей: {len(entries)}", copy_token(entries, target)
+        )
+        return self._redirect(target)
 
 
 class OwnEntryMixin(HtmxLoginRequiredMixin):
