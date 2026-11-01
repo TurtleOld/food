@@ -14,6 +14,8 @@
 - One ticket, one branch, one PR. Write the PR description in Russian; the `pr` skill shapes its body.
 - PR title and every commit follow Conventional Commits (`feat(scope): …`, `fix: …`): PRs are squash-merged and release-please builds versions and the changelog from these messages.
 - A PR is ready when `make check` and `make coverage` are green.
+- For every ticket, use `implement` followed by `ponytail-review`. Fix every review finding and repeat the review after fixes; record any finding that remains unresolved in the PR description.
+- After implementation and review, create one PR per ticket using the `pr` skill and the Russian description required above. Include verification evidence and unresolved findings.
 
 ## Conventions
 
