@@ -7,13 +7,22 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.db.models import QuerySet
 from django.forms import ModelForm
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import TemplateView, UpdateView
+from django.views.generic import ListView, TemplateView, UpdateView, View
 
 from assistant.budget import month_summary
-from assistant.forms import LLMSettingsForm
-from assistant.models import LLMSettings
+from assistant.forms import LLMSettingsForm, ProposalForm
+from assistant.models import LLMSettings, Proposal
+from assistant.proposals import (
+    ProposalError,
+    ProposalNotFound,
+    confirm_proposal,
+    reject_proposal,
+    update_pending_proposal,
+)
+from core.models import Product
 
 
 def format_rub(value: Decimal) -> str:
@@ -65,3 +74,98 @@ class SettingsView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         messages.success(self.request, "Настройки сохранены")
         return super().form_valid(form)
+
+
+class ProposalListView(LoginRequiredMixin, ListView):
+    """Предложения текущего Члена семьи: ожидающие решения — первыми."""
+
+    template_name = "assistant/proposals.html"
+    context_object_name = "proposals"
+
+    def get_queryset(self) -> QuerySet[Proposal]:
+        return Proposal.objects.filter(member_id=self.request.user.pk).select_related("product")
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        pending: list[Proposal] = []
+        decided: list[Proposal] = []
+        for proposal in self.object_list:
+            if proposal.status == Proposal.Status.PENDING:
+                pending.append(proposal)
+            else:
+                decided.append(proposal)
+        context.update(pending=pending, decided=decided)
+        return context
+
+
+class ProposalUpdateView(LoginRequiredMixin, UpdateView):
+    """Правит ожидающее Предложение; чужие и уже решённые недоступны."""
+
+    model = Proposal
+    form_class = ProposalForm
+    template_name = "assistant/proposal_form.html"
+    context_object_name = "proposal"
+
+    def get_queryset(self) -> QuerySet[Proposal]:
+        return Proposal.objects.filter(
+            member_id=self.request.user.pk, status=Proposal.Status.PENDING
+        )
+
+    def get_initial(self) -> dict[str, Any]:
+        initial = super().get_initial()
+        product_id = self.request.GET.get("product")
+        if product_id and self.object.kind == Proposal.Kind.ENTRY:
+            try:
+                product = Product.objects.filter(pk=product_id).first()
+            except (TypeError, ValueError):
+                product = None
+            if product is not None:
+                initial["product"] = product
+        return initial
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        try:
+            update_pending_proposal(self.request.user, self.object.pk, form.cleaned_data)
+        except ProposalNotFound as error:
+            messages.error(self.request, str(error))
+            return redirect("assistant:proposals")
+        messages.success(self.request, "Предложение поправлено")
+        return redirect("assistant:proposals")
+
+
+class ProposalDecisionView(LoginRequiredMixin, View):
+    """Общее для подтверждения и отклонения: только POST и возврат к карточкам."""
+
+    http_method_names = ["post"]
+    success_message = ""
+
+    def decide(self, member: Any, proposal_id: int) -> Proposal:
+        raise NotImplementedError
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponse:
+        proposal = get_object_or_404(Proposal, pk=pk, member=request.user)
+        try:
+            self.decide(request.user, proposal.pk)
+        except ProposalError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, self.success_message)
+        return redirect("assistant:proposals")
+
+
+class ProposalConfirmView(ProposalDecisionView):
+    """Подтверждает Предложение; повтор не создаёт вторую Запись."""
+
+    success_message = "Предложение подтверждено"
+
+    def decide(self, member: Any, proposal_id: int) -> Proposal:
+        return confirm_proposal(member, proposal_id)
+
+
+class ProposalRejectView(ProposalDecisionView):
+    """Отклоняет Предложение; данные Дневника не создаются."""
+
+    success_message = "Предложение отклонено"
+
+    def decide(self, member: Any, proposal_id: int) -> Proposal:
+        return reject_proposal(member, proposal_id)

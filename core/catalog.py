@@ -19,6 +19,12 @@ def entries_count(product: Product) -> int:
     return product.diary_entries.count()
 
 
+def proposals_count(product: Product) -> int:
+    """Число Предложений, ссылающихся на Продукт (обратная связь `assistant.Proposal`)."""
+    related = getattr(product, "proposals", None)
+    return related.count() if related is not None else 0
+
+
 def catalog_products(query: str = "") -> QuerySet[Product]:
     """Продукты Каталога с кодами; при непустом `query` — только совпадения с ним."""
     products = Product.objects.prefetch_related("barcodes")
