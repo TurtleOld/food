@@ -10,6 +10,7 @@
         <a class="btn-quiet" href="{% url 'assistant:proposals' %}">
           Предложения{% if pending_proposals %} · {{ pending_proposals|length }}{% endif %}
         </a>
+        <a class="btn-quiet" href="{% url 'assistant:summaries' %}">Сводки</a>
         <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
       </div>
     </div>

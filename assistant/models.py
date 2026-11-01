@@ -1,5 +1,6 @@
 """Провайдер, бюджет, Предложения и личная лента Ассистента."""
 
+import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -327,3 +328,71 @@ class Message(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_role_display()}: {self.text[:40]}"
+
+
+class SummarySettings(models.Model):
+    """Личное расписание Сводок Члена семьи: включает виды и задаёт местное время.
+
+    Строка создаётся при первом обращении к экрану или тику; значения по умолчанию —
+    вечерняя и недельная Сводки в 21:00.
+    """
+
+    member = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="summary_settings",
+    )
+    evening_enabled = models.BooleanField(default=True)
+    evening_time = models.TimeField(default=datetime.time(21, 0))
+    weekly_enabled = models.BooleanField(default=True)
+    weekly_time = models.TimeField(default=datetime.time(21, 0))
+
+    def __str__(self) -> str:
+        return f"Сводки {self.member_id}"
+
+    @classmethod
+    def for_member(cls, member: Any) -> "SummarySettings":
+        """Возвращает расписание человека, создавая его с умолчаниями при первом обращении."""
+        summary_settings, _ = cls.objects.get_or_create(member=member)
+        return summary_settings
+
+
+class Summary(models.Model):
+    """Отправленная Сводка: неизменяемый текст за конкретный местный период.
+
+    Уникальность по человеку, виду и началу периода — единственный замок против
+    повторной отправки: повторный тик или повторная задача получают уже созданную
+    строку и ничего не добавляют.
+    """
+
+    class Kind(models.TextChoices):
+        EVENING = "evening", "Вечерняя"
+        WEEKLY = "weekly", "Недельная"
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="summaries",
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    period_start = models.DateField()
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-period_start", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["member", "kind", "period_start"],
+                name="assistant_summary_member_kind_period_unique",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} {self.member_id} {self.period_start}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Запрещает перезапись: отправленная Сводка не меняется после новых Записей."""
+        if not self._state.adding:
+            raise ValueError("Отправленную Сводку нельзя изменить")
+        super().save(*args, **kwargs)
