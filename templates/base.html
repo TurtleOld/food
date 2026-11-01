@@ -25,6 +25,7 @@
       <nav class="topbar-links" aria-label="Разделы">
         <a href="{% url 'core:day' %}"{% if nav_section == 'diary' %} aria-current="page"{% endif %}>Дневник</a>
         <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>Продукты</a>
+        <a href="{% url 'core:profile' %}"{% if nav_section == 'profile' %} aria-current="page"{% endif %}>Профиль</a>
         <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>Цель</a>
         <a href="{% url 'assistant:budget' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>Бюджет</a>
       </nav>
@@ -42,6 +43,7 @@
     <nav class="tabbar" aria-label="Разделы">
       <a href="{% url 'core:day' %}"{% if nav_section == 'diary' %} aria-current="page"{% endif %}>{% include "components/icons/notebook.html" %}<span>Дневник</span></a>
       <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>{% include "components/icons/apple.html" %}<span>Продукты</span></a>
+      <a href="{% url 'core:profile' %}"{% if nav_section == 'profile' %} aria-current="page"{% endif %}>{% include "components/icons/user.html" %}<span>Профиль</span></a>
       <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>{% include "components/icons/target.html" %}<span>Цель</span></a>
       <a href="{% url 'assistant:budget' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>{% include "components/icons/wallet.html" %}<span>Бюджет</span></a>
     </nav>

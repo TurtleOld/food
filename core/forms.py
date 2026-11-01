@@ -1,12 +1,15 @@
+import datetime
 from decimal import Decimal
 from typing import Any, cast
 
 from django import forms
 from django.db import transaction
+from django.utils import timezone
 
 from core.barcodes import normalize_barcode
-from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
 from core.nutrition import NUTRITION_FIELDS, NUTRITION_ROWS
+from core.profile import MAX_ADJUSTMENT_KCAL, MIN_ADJUSTMENT_KCAL
 
 
 class DayField(forms.DateField):
@@ -158,6 +161,114 @@ class DiaryEntryEditForm(DiaryEntryForm):
         super().__init__(*args, **kwargs)
         # Без пустого варианта: Приём пищи у записи всегда выбран.
         cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
+
+
+class ProfileForm(forms.ModelForm):
+    """Форма антропометрии Профиля; любое поле можно оставить пустым."""
+
+    class Meta:
+        model = Profile
+        fields = ["height_cm", "birth_date", "sex", "activity"]
+        field_classes = {"birth_date": DayField}
+        widgets = {
+            "birth_date": day_widget(),
+            "height_cm": forms.NumberInput(
+                attrs={
+                    "class": "input num",
+                    "inputmode": "numeric",
+                    "min": Profile.MIN_HEIGHT_CM,
+                    "max": Profile.MAX_HEIGHT_CM,
+                }
+            ),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["birth_date"].widget.attrs.update(
+            {"class": "input num", "inputmode": "numeric"}
+        )
+        self.fields["sex"].widget.attrs.setdefault("class", "input")
+        self.fields["activity"].widget.attrs.setdefault("class", "input")
+        cast(forms.ChoiceField, self.fields["sex"]).choices = [
+            ("", "Не указан"),
+            *Profile.Sex.choices,
+        ]
+        cast(forms.ChoiceField, self.fields["activity"]).choices = [
+            ("", "Не указана"),
+            *Profile.Activity.choices,
+        ]
+
+    def clean_birth_date(self) -> datetime.date | None:
+        """Не принимает будущую или неправдоподобно давнюю дату рождения."""
+        birth_date = self.cleaned_data["birth_date"]
+        if birth_date is None:
+            return None
+        if birth_date > timezone.localdate():
+            raise forms.ValidationError("Дата рождения не может быть в будущем")
+        if birth_date < datetime.date(1900, 1, 1):
+            raise forms.ValidationError("Дата рождения не может быть раньше 1900 года")
+        return birth_date
+
+
+class WeightMeasurementForm(forms.ModelForm):
+    """Форма нового Замера веса на дату."""
+
+    class Meta:
+        model = WeightMeasurement
+        fields = ["date", "weight_kg"]
+        field_classes = {"date": DayField}
+        widgets = {
+            "date": day_widget(),
+            "weight_kg": forms.NumberInput(
+                attrs={
+                    "class": "input num",
+                    "inputmode": "decimal",
+                    "step": "0.1",
+                    "min": WeightMeasurement.MIN_WEIGHT_KG,
+                    "max": WeightMeasurement.MAX_WEIGHT_KG,
+                }
+            ),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["date"].widget.attrs.update({"class": "input num", "inputmode": "numeric"})
+
+    def clean_date(self) -> datetime.date:
+        """Не принимает будущую или неправдоподобно давнюю дату Замера."""
+        date = self.cleaned_data["date"]
+        if date > timezone.localdate():
+            raise forms.ValidationError("Дата Замера не может быть в будущем")
+        if date < datetime.date(1900, 1, 1):
+            raise forms.ValidationError("Дата Замера не может быть раньше 1900 года")
+        return date
+
+
+class TargetAdjustmentForm(forms.Form):
+    """Ручная поправка к расчёту поддержания, в ккал."""
+
+    adjustment = forms.DecimalField(
+        required=False,
+        max_digits=4,
+        decimal_places=0,
+        min_value=MIN_ADJUSTMENT_KCAL,
+        max_value=MAX_ADJUSTMENT_KCAL,
+        initial=Decimal(0),
+        label="Поправка, ккал",
+        widget=forms.NumberInput(
+            attrs={
+                "class": "input num",
+                "inputmode": "numeric",
+                "step": "10",
+                "min": MIN_ADJUSTMENT_KCAL,
+                "max": MAX_ADJUSTMENT_KCAL,
+            }
+        ),
+    )
+
+    def clean_adjustment(self) -> Decimal:
+        """Пустая поправка означает поддержание."""
+        return self.cleaned_data.get("adjustment") or Decimal(0)
 
 
 class DailyTargetForm(forms.ModelForm):

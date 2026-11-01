@@ -3,7 +3,8 @@ from __future__ import annotations
 import copy
 import datetime
 import json
-from typing import Any
+from decimal import Decimal
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -17,11 +18,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.urls import Resolver404, resolve, reverse, reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
     DetailView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
@@ -63,6 +66,9 @@ from core.forms import (
     DiaryEntrySheetForm,
     ProductCreateForm,
     ProductEditForm,
+    ProfileForm,
+    TargetAdjustmentForm,
+    WeightMeasurementForm,
 )
 from core.htmx import (
     FragmentMixin,
@@ -70,8 +76,9 @@ from core.htmx import (
     sheet_saved_response,
     with_toasts,
 )
-from core.models import Barcode, DailyTarget, DiaryEntry, Product
+from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
 from core.off import OffLookup, Outcome, lookup
+from core.profile import MIN_ADULT_AGE, bmi_value, latest_weight, target_suggestion
 from core.pwa import cache_name, precache_urls
 from core.undo import add_undo_message, restore
 
@@ -560,6 +567,84 @@ class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
         context["has_target"] = target is not None
         if target is not None:
             context["macro_kcal"] = kcal_from_macros(target.proteins, target.fats, target.carbs)
+        return context
+
+
+class ProfileView(HtmxLoginRequiredMixin, FormView):
+    """Профиль Члена семьи: антропометрия, Замеры веса, ИМТ и предложение цели.
+
+    Профиль и Замер сохраняются разными формами на одной странице. Расчёт цели —
+    только предложение: в Суточную цель он попадает после явной отправки формы.
+    """
+
+    form_class = ProfileForm
+    template_name = "core/profile.html"
+    success_url = reverse_lazy("core:profile")
+    weight_form: WeightMeasurementForm | None = None
+
+    def get_profile(self) -> Profile:
+        profile = Profile.objects.filter(member_id=self.request.user.pk).first()
+        return profile or Profile(member_id=cast(int, self.request.user.pk))
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        kwargs = super().get_form_kwargs()
+        kwargs["instance"] = self.get_profile()
+        return kwargs
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        Profile.objects.update_or_create(
+            member_id=cast(int, self.request.user.pk),
+            defaults={
+                "height_cm": form.cleaned_data["height_cm"],
+                "birth_date": form.cleaned_data["birth_date"],
+                "sex": form.cleaned_data["sex"],
+                "activity": form.cleaned_data["activity"],
+            },
+        )
+        messages.success(self.request, "Профиль сохранён")
+        return super().form_valid(form)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        if "weight_kg" in request.POST:
+            return self._post_weight(request)
+        return super().post(request, *args, **kwargs)
+
+    def _post_weight(self, request: HttpRequest) -> HttpResponse:
+        form = WeightMeasurementForm(request.POST)
+        if form.is_valid():
+            form.instance.member = self.request.user
+            form.save()
+            messages.success(request, "Замер веса добавлен")
+            return redirect("core:profile")
+        self.weight_form = form
+        return self.render_to_response(
+            self.get_context_data(form=ProfileForm(instance=self.get_profile()))
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        profile = self.get_profile()
+        today = timezone.localdate()
+        adjustment_form = TargetAdjustmentForm(self.request.GET or None)
+        adjustment = Decimal(0)
+        if adjustment_form.is_valid():
+            adjustment = adjustment_form.cleaned_data["adjustment"]
+        weight = latest_weight(self.request.user)
+        base_suggestion = target_suggestion(self.request.user)
+        suggestion = (
+            target_suggestion(self.request.user, adjustment) if adjustment else base_suggestion
+        )
+        context.update(
+            profile=profile,
+            is_adult=(profile.age_on(today) or 0) >= MIN_ADULT_AGE,
+            weight_form=self.weight_form or WeightMeasurementForm(initial={"date": today}),
+            measurements=WeightMeasurement.objects.filter(member_id=self.request.user.pk),
+            bmi=bmi_value(profile.height_cm, weight.weight_kg if weight else None),
+            adjustment_form=adjustment_form,
+            suggestion=suggestion,
+            adjustment_too_large=bool(adjustment and base_suggestion and suggestion is None),
+            target=DailyTarget.objects.filter(member_id=self.request.user.pk).first(),
+        )
         return context
 
 
