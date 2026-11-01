@@ -27,7 +27,7 @@
         <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>Продукты</a>
         <a href="{% url 'core:profile' %}"{% if nav_section == 'profile' %} aria-current="page"{% endif %}>Профиль</a>
         <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>Цель</a>
-        <a href="{% url 'assistant:budget' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>Бюджет</a>
+        <a href="{% url 'assistant:chat' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>Ассистент</a>
       </nav>
       <form class="topbar-user" method="post" action="{% url 'core:logout' %}">
         {% csrf_token %}
@@ -45,7 +45,7 @@
       <a href="{% url 'core:product_list' %}"{% if nav_section == 'products' %} aria-current="page"{% endif %}>{% include "components/icons/apple.html" %}<span>Продукты</span></a>
       <a href="{% url 'core:profile' %}"{% if nav_section == 'profile' %} aria-current="page"{% endif %}>{% include "components/icons/user.html" %}<span>Профиль</span></a>
       <a href="{% url 'core:daily_target_edit' %}"{% if nav_section == 'target' %} aria-current="page"{% endif %}>{% include "components/icons/target.html" %}<span>Цель</span></a>
-      <a href="{% url 'assistant:budget' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>{% include "components/icons/wallet.html" %}<span>Бюджет</span></a>
+      <a href="{% url 'assistant:chat' %}"{% if nav_section == 'assistant' %} aria-current="page"{% endif %}>{% include "components/icons/chat.html" %}<span>Ассистент</span></a>
     </nav>
   {% endif %}
   <div id="toasts" aria-live="polite">
@@ -54,6 +54,7 @@
          @htmx:response-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)"
          @htmx:send-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)">Не получилось, попробуйте ещё раз</div>
   </div>
+  {% block scripts %}{% endblock %}
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

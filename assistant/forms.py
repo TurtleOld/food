@@ -95,6 +95,18 @@ class ProposalForm(forms.ModelForm):
             "meal_type",
         ]
         field_classes = {"date": DayField}
+        labels = {
+            "product": "Продукт Каталога",
+            "new_name": "Название",
+            "new_base_unit": "Единица",
+            "new_calories": "Калории",
+            "new_proteins": "Белки",
+            "new_fats": "Жиры",
+            "new_carbs": "Углеводы",
+            "amount": "Количество",
+            "date": "День",
+            "meal_type": "Приём пищи",
+        }
         widgets = {
             "date": day_widget(),
             "meal_type": forms.RadioSelect,
@@ -108,7 +120,9 @@ class ProposalForm(forms.ModelForm):
             "name"
         )
         cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
-        self.fields["product"].widget.attrs.setdefault("class", "input")
+        self.fields["product"].widget.attrs.update(
+            {"class": "input", "x-on:change": "existing = $event.target.value"}
+        )
         self.fields["new_name"].widget.attrs.setdefault("class", "input")
         self.fields["amount"].widget.attrs.update(
             {"class": "input num", "step": "0.1", "min": "0.1", "inputmode": "decimal"}
@@ -194,13 +208,24 @@ class ChatMessageForm(forms.Form):
         label="Сообщение",
         widget=forms.Textarea(
             attrs={
-                "class": "input",
+                "class": "input chat-text",
                 "rows": 2,
                 "placeholder": "Спросите про КБЖУ или добавьте запись…",
             }
         ),
     )
-    photo = forms.FileField(required=False, label="Фото")
+    # `accept="image/*"` открывает на телефоне выбор камеры или галереи, а на ПК — файл.
+    photo = forms.FileField(
+        required=False,
+        label="Фото",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "class": "chat-file",
+                "accept": "image/*",
+                "aria-describedby": "photo-help",
+            }
+        ),
+    )
 
     def clean(self) -> dict[str, Any] | None:
         cleaned_data = super().clean()
