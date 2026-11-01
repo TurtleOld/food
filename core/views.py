@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.urls import Resolver404, resolve, reverse, reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -591,7 +592,15 @@ class ProfileView(HtmxLoginRequiredMixin, FormView):
         return kwargs
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
-        form.save()
+        Profile.objects.update_or_create(
+            member_id=cast(int, self.request.user.pk),
+            defaults={
+                "height_cm": form.cleaned_data["height_cm"],
+                "birth_date": form.cleaned_data["birth_date"],
+                "sex": form.cleaned_data["sex"],
+                "activity": form.cleaned_data["activity"],
+            },
+        )
         messages.success(self.request, "Профиль сохранён")
         return super().form_valid(form)
 
@@ -615,7 +624,7 @@ class ProfileView(HtmxLoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         profile = self.get_profile()
-        today = datetime.date.today()
+        today = timezone.localdate()
         adjustment_form = TargetAdjustmentForm(self.request.GET or None)
         adjustment = Decimal(0)
         if adjustment_form.is_valid():

@@ -1,9 +1,11 @@
 import datetime
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import DailyTarget, Profile, WeightMeasurement
 
@@ -11,11 +13,11 @@ User = get_user_model()
 
 
 def _years_ago(years: int) -> datetime.date:
-    return datetime.date(datetime.date.today().year - years, 1, 1)
+    return datetime.date(timezone.localdate().year - years, 1, 1)
 
 
 def _birthday_years_ago(years: int) -> datetime.date:
-    today = datetime.date.today()
+    today = timezone.localdate()
     try:
         return today.replace(year=today.year - years)
     except ValueError:
@@ -116,7 +118,7 @@ class ProfileFormTest(TestCase):
         self.assertFalse(Profile.objects.exists())
 
     def test_future_birth_date_is_rejected(self):
-        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        tomorrow = timezone.localdate() + datetime.timedelta(days=1)
 
         response = self.client.post(self.url, {"birth_date": tomorrow.isoformat()})
 
@@ -149,7 +151,7 @@ class WeightMeasurementTest(TestCase):
         return self.client.post(self.url, {"date": date, "weight_kg": weight})
 
     def test_weight_is_saved_for_the_current_member(self):
-        today = datetime.date.today()
+        today = timezone.localdate()
 
         response = self._post(today.isoformat(), "80.5")
 
@@ -160,7 +162,7 @@ class WeightMeasurementTest(TestCase):
         self.assertEqual(measurement.weight_kg, Decimal("80.5"))
 
     def test_future_weight_date_is_rejected(self):
-        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        tomorrow = timezone.localdate() + datetime.timedelta(days=1)
 
         response = self._post(tomorrow.isoformat(), "80.5")
 
@@ -171,7 +173,7 @@ class WeightMeasurementTest(TestCase):
     def test_invalid_weight_is_rejected(self):
         for weight in ("NaN", "Infinity", "-Infinity", "abc", ""):
             with self.subTest(weight=weight):
-                response = self._post(datetime.date.today().isoformat(), weight)
+                response = self._post(timezone.localdate().isoformat(), weight)
 
                 self.assertEqual(response.status_code, 200)
                 self.assertFalse(WeightMeasurement.objects.exists())
@@ -179,7 +181,7 @@ class WeightMeasurementTest(TestCase):
     def test_unrealistic_weight_is_rejected(self):
         for weight in ("19.9", "400.1"):
             with self.subTest(weight=weight):
-                response = self._post(datetime.date.today().isoformat(), weight)
+                response = self._post(timezone.localdate().isoformat(), weight)
 
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, "Вес")
@@ -188,7 +190,7 @@ class WeightMeasurementTest(TestCase):
     def test_invalid_weight_keeps_the_saved_profile_on_screen(self):
         self.client.post(self.url, {"height_cm": "180"})
 
-        response = self._post(datetime.date.today().isoformat(), "NaN")
+        response = self._post(timezone.localdate().isoformat(), "NaN")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'value="180"')
@@ -203,16 +205,16 @@ class WeightMeasurementTest(TestCase):
             carbs=Decimal("220"),
         )
 
-        self._post(datetime.date.today().isoformat(), "95.0")
+        self._post(timezone.localdate().isoformat(), "95.0")
 
         target = DailyTarget.objects.get(member=self.member)
         self.assertEqual(target.calories, Decimal("2000.0"))
         self.assertEqual(target.proteins, Decimal("120.0"))
 
     def test_measurements_are_listed_newest_first(self):
-        older = datetime.date.today() - datetime.timedelta(days=10)
+        older = timezone.localdate() - datetime.timedelta(days=10)
         self._post(older.isoformat(), "80.0")
-        self._post(datetime.date.today().isoformat(), "90.0")
+        self._post(timezone.localdate().isoformat(), "90.0")
 
         response = self.client.get(self.url)
 
@@ -222,7 +224,7 @@ class WeightMeasurementTest(TestCase):
     def test_other_members_weight_is_not_shown(self):
         WeightMeasurement.objects.create(
             member=User.objects.create_user(username="bob"),
-            date=datetime.date.today(),
+            date=timezone.localdate(),
             weight_kg=Decimal("123.4"),
         )
 
@@ -232,9 +234,9 @@ class WeightMeasurementTest(TestCase):
 
     def test_bmi_uses_the_latest_measurement(self):
         self.client.post(self.url, {"height_cm": "180"})
-        older = datetime.date.today() - datetime.timedelta(days=10)
+        older = timezone.localdate() - datetime.timedelta(days=10)
         self._post(older.isoformat(), "80.0")
-        self._post(datetime.date.today().isoformat(), "90.0")
+        self._post(timezone.localdate().isoformat(), "90.0")
 
         response = self.client.get(self.url)
 
@@ -263,7 +265,7 @@ class TargetSuggestionTest(TestCase):
     def _add_weight(self, weight="80.0"):
         return self.client.post(
             self.url,
-            {"date": datetime.date.today().isoformat(), "weight_kg": weight},
+            {"date": timezone.localdate().isoformat(), "weight_kg": weight},
         )
 
     def test_complete_adult_profile_suggests_maintenance_and_macros(self):
@@ -320,7 +322,7 @@ class TargetSuggestionTest(TestCase):
         self.assertContains(response, "Принять цель")
 
     def test_day_before_the_eighteenth_birthday_is_not_adult(self):
-        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        tomorrow = timezone.localdate() + datetime.timedelta(days=1)
         try:
             birthday = tomorrow.replace(year=tomorrow.year - 18)
         except ValueError:
@@ -386,6 +388,36 @@ class TargetSuggestionTest(TestCase):
         response = self.client.get(self.url, {"adjustment": "300"})
 
         self.assertContains(response, "2792")
+
+    @mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2030, 6, 15))
+    def test_age_uses_the_application_local_date(self, _localdate):
+        self.client.post(
+            self.url,
+            {
+                "height_cm": "180",
+                "birth_date": "2012-06-16",
+                "sex": "male",
+                "activity": "sedentary",
+            },
+        )
+        self.client.post(
+            self.url,
+            {"date": "2030-06-15", "weight_kg": "80.0"},
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, "совершеннолетним")
+
+    @mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2030, 6, 15))
+    def test_weight_date_validation_uses_the_application_local_date(self, _localdate):
+        response = self.client.post(
+            self.url,
+            {"date": "2030-06-16", "weight_kg": "80.0"},
+        )
+
+        self.assertContains(response, "будущем")
+        self.assertFalse(WeightMeasurement.objects.exists())
 
     def test_invalid_adjustment_is_explained_without_a_server_error(self):
         self._complete_profile()

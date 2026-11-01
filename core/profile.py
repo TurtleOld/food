@@ -16,6 +16,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
+from django.utils import timezone
 
 from core.models import Profile, WeightMeasurement
 
@@ -116,7 +117,7 @@ def target_suggestion(
     weight = latest_weight(member)
     if profile is None or weight is None:
         return None
-    maintenance = _maintenance_kcal(profile, weight.weight_kg, on_date or datetime.date.today())
+    maintenance = _maintenance_kcal(profile, weight.weight_kg, on_date or timezone.localdate())
     if maintenance is None:
         return None
     calories = maintenance + adjustment_kcal

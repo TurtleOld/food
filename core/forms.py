@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from django import forms
 from django.db import transaction
+from django.utils import timezone
 
 from core.barcodes import normalize_barcode
 from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
@@ -202,7 +203,7 @@ class ProfileForm(forms.ModelForm):
         birth_date = self.cleaned_data["birth_date"]
         if birth_date is None:
             return None
-        if birth_date > datetime.date.today():
+        if birth_date > timezone.localdate():
             raise forms.ValidationError("Дата рождения не может быть в будущем")
         if birth_date < datetime.date(1900, 1, 1):
             raise forms.ValidationError("Дата рождения не может быть раньше 1900 года")
@@ -236,7 +237,7 @@ class WeightMeasurementForm(forms.ModelForm):
     def clean_date(self) -> datetime.date:
         """Не принимает будущую или неправдоподобно давнюю дату Замера."""
         date = self.cleaned_data["date"]
-        if date > datetime.date.today():
+        if date > timezone.localdate():
             raise forms.ValidationError("Дата Замера не может быть в будущем")
         if date < datetime.date(1900, 1, 1):
             raise forms.ValidationError("Дата Замера не может быть раньше 1900 года")
