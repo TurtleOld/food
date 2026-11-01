@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/TurtleOld/food/compare/v0.1.0...v0.2.0) (2026-11-01)
+
+
+### Features
+
+* **assistant:** run chat turns in the background ([#38](https://github.com/TurtleOld/food/issues/38)) ([1e85fd0](https://github.com/TurtleOld/food/commit/1e85fd01c30a86c49684a22370dd21a6331dab8b))
+* **assistant:** инструменты и Предложения ([#36](https://github.com/TurtleOld/food/issues/36)) ([4120ad2](https://github.com/TurtleOld/food/commit/4120ad2a1cb590a25ae224b7ef210405fd715037))
+* **assistant:** провайдер, бюджет и шлюз LLM ([#32](https://github.com/TurtleOld/food/issues/32)) ([4917b86](https://github.com/TurtleOld/food/commit/4917b86ff4328f2c0cb4ad5c53e73914a818d9bc))
+* **diary:** копирование дня, приёма пищи и записи ([#33](https://github.com/TurtleOld/food/issues/33)) ([a516004](https://github.com/TurtleOld/food/commit/a5160047a47e4986e35c176272500aa23b268edf))
+* **profile:** add profile, weight measurements and target suggestion ([#34](https://github.com/TurtleOld/food/issues/34)) ([829737f](https://github.com/TurtleOld/food/commit/829737fdf90a4d34f113177cbb89b3e3e5469a3a))
+* **push:** Web Push, подписки устройств и service worker ([#37](https://github.com/TurtleOld/food/issues/37)) ([e12c98f](https://github.com/TurtleOld/food/commit/e12c98ff564160144e12f94e6e1387b5944c574f))
+* **tasks:** durable background queue and scheduler tick ([#35](https://github.com/TurtleOld/food/issues/35)) ([5f87acf](https://github.com/TurtleOld/food/commit/5f87acf275040edeaf461c5216ae4fc28ff09d63))
+
 ## [0.1.0](https://github.com/TurtleOld/food/compare/v0.0.1...v0.1.0) (2026-10-09)
 
 
