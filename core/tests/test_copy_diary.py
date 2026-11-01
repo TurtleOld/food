@@ -5,7 +5,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from core.models import DiaryEntry, Product
@@ -55,7 +55,7 @@ class CopyBase(TestCase):
         assert match, "в форме копирования нет одноразового ключа"
         return match.group(1)
 
-    def post_copy(
+    def copy_data(
         self,
         *,
         scope="day",
@@ -65,10 +65,9 @@ class CopyBase(TestCase):
         meal="",
         entry="",
         target_meal="",
-        follow=False,
         **extra,
     ):
-        data = {
+        return {
             "scope": scope,
             "source_date": (source or self.source).isoformat(),
             "target_date": (target or self.target).isoformat(),
@@ -78,7 +77,17 @@ class CopyBase(TestCase):
             "operation": operation or secrets.token_urlsafe(8),
             **extra,
         }
-        return self.client.post(self.copy_url(source or self.source), data, follow=follow)
+
+    def post_copy(
+        self,
+        *,
+        client=None,
+        follow=False,
+        **kwargs,
+    ):
+        source = kwargs.get("source") or self.source
+        data = self.copy_data(**kwargs)
+        return (client or self.client).post(self.copy_url(source), data, follow=follow)
 
 
 class CopyEntryPointTests(CopyBase):
@@ -112,6 +121,12 @@ class CopyEntryPointTests(CopyBase):
         page = self.client.get(f"{self.copy_url()}?meal=lunch")
 
         self.assertContains(page, "Обед")
+
+    def test_target_day_defaults_to_the_application_time_zone(self):
+        with mock.patch("core.views.timezone.localdate", return_value=datetime.date(2030, 1, 2)):
+            page = self.client.get(self.copy_url())
+
+        self.assertContains(page, 'value="02/01/2030"')
 
     def test_copy_requires_login(self):
         self.client.logout()
@@ -197,6 +212,19 @@ class CopyDayTests(CopyBase):
         self.assertRedirects(first, reverse("core:day_on", args=[self.target.isoformat()]))
         self.assertEqual(DiaryEntry.objects.filter(member=self.member, date=self.target).count(), 1)
         self.assertContains(second, "уже")
+
+    def test_copy_receipt_is_in_the_database_not_the_session(self):
+        self.eat(self.member, self.chicken, "100", self.source)
+        operation = self.operation()
+        data = self.copy_data(operation=operation)
+        self.post_copy(operation=operation)
+
+        other_session = Client()
+        other_session.force_login(self.member)
+        second = other_session.post(self.copy_url(), data, follow=True)
+
+        self.assertContains(second, "уже")
+        self.assertEqual(DiaryEntry.objects.filter(member=self.member, date=self.target).count(), 1)
 
     def test_copy_does_not_touch_another_members_source_entries(self):
         self.eat(self.member, self.chicken, "100", self.source)

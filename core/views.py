@@ -12,6 +12,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.auth.models import AnonymousUser
+from django.db import transaction
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form, ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
@@ -81,7 +82,15 @@ from core.htmx import (
     sheet_saved_response,
     with_toasts,
 )
-from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
+from core.models import (
+    Barcode,
+    DailyTarget,
+    DiaryCopyOperation,
+    DiaryEntry,
+    Product,
+    Profile,
+    WeightMeasurement,
+)
 from core.off import OffLookup, Outcome, lookup
 from core.profile import MIN_ADULT_AGE, bmi_value, latest_weight, target_suggestion
 from core.pwa import cache_name, precache_urls
@@ -155,8 +164,6 @@ _COPY_TITLES: dict[str, tuple[str, str]] = {
         "Запись добавится в выбранный день и приём пищи.",
     ),
 }
-_COPY_MEMORY = "copy_operations"
-_COPY_MEMORY_SIZE = 20
 
 
 class DiaryCopyView(HtmxLoginRequiredMixin, View):
@@ -219,7 +226,7 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
             initial={
                 "scope": scope,
                 "source_date": entry.date if entry else self.page_date,
-                "target_date": datetime.date.today(),
+                "target_date": timezone.localdate(),
                 "meal_type": meal,
                 "entry": entry.pk if entry else "",
                 "target_meal_type": entry.meal_type if entry else "",
@@ -237,19 +244,24 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
         cleaned = form.cleaned_data
         target: datetime.date = cleaned["target_date"]
         operation: str = cleaned["operation"]
-        used: list[str] = request.session.get(_COPY_MEMORY, [])
-        if operation in used:
-            messages.info(request, "Это копирование уже выполнено")
-            return self._redirect(target)
+        entries: list[DiaryEntry] = []
+        duplicate = False
         try:
-            entries = copy_diary(
-                request.user,
-                source_date=cleaned["source_date"],
-                target_date=target,
-                meal_type=cleaned.get("meal_type") or None,
-                entry=cleaned.get("entry"),
-                target_meal_type=cleaned.get("target_meal_type") or None,
-            )
+            with transaction.atomic():
+                _, created = DiaryCopyOperation.objects.get_or_create(
+                    member_id=request.user.pk, key=operation
+                )
+                if created:
+                    entries = copy_diary(
+                        request.user,
+                        source_date=cleaned["source_date"],
+                        target_date=target,
+                        meal_type=cleaned.get("meal_type") or None,
+                        entry=cleaned.get("entry"),
+                        target_meal_type=cleaned.get("target_meal_type") or None,
+                    )
+                else:
+                    duplicate = True
         except NothingToCopy:
             empty_message = {
                 DiaryCopyForm.Scope.MEAL.value: "В выбранном приёме нет записей",
@@ -257,7 +269,9 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
             }.get(scope, "В исходном дне нет записей")
             form.add_error(None, empty_message)
             return self._render(form, scope, entry, meal)
-        request.session[_COPY_MEMORY] = [*used, operation][-_COPY_MEMORY_SIZE:]
+        if duplicate:
+            messages.info(request, "Это копирование уже выполнено")
+            return self._redirect(target)
         add_undo_message(
             request, f"Скопировано записей: {len(entries)}", copy_token(entries, target)
         )

@@ -420,8 +420,13 @@ def copy_token(entries: list[DiaryEntry], target_date: datetime.date) -> str:
 
 @restorer("entries_copied")
 def _restore_copied_entries(member: Member, payload: dict[str, Any]) -> Restored:
-    entries = DiaryEntry.objects.filter(pk__in=payload["entries"], member_id=member.pk)
-    if entries.count() != len(payload["entries"]):
-        raise CannotUndo
-    entries.delete()
+    with transaction.atomic():
+        entries = list(
+            DiaryEntry.objects.select_for_update().filter(
+                pk__in=payload["entries"], member_id=member.pk
+            )
+        )
+        if len(entries) != len(payload["entries"]):
+            raise CannotUndo
+        DiaryEntry.objects.filter(pk__in=[entry.pk for entry in entries]).delete()
     return Restored(datetime.date.fromisoformat(payload["date"]))
