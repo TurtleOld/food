@@ -1,29 +1,37 @@
-<article class="box proposal" id="proposal-{{ proposal.pk }}">
+{% comment %}Карточка Предложения: общая для отдельного экрана и ленты чата. Контекст: `proposal`, `in_chat`.{% endcomment %}
+<article class="box proposal-card" id="proposal-{{ proposal.pk }}">
+  <p class="proposal-kind">
+    {% if proposal.kind == "product" %}Предложение Продукта{% else %}Предложение Записи{% endif %}
+    {% if proposal.status == "pending" %}· ждёт решения{% endif %}
+  </p>
+
+  <p class="proposal-name">
+    {% if proposal.product %}{{ proposal.product.name }}{% elif proposal.new_name %}{{ proposal.new_name }}{% else %}{{ proposal.product_name }}{% endif %}
+  </p>
+
   {% if proposal.kind == "product" %}
-    <p>
-      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>
-      — новый Продукт
-    </p>
+    <p class="proposal-meta">Добавит новый Продукт в Каталог, без Записи дневника.</p>
   {% else %}
-    <p>
-      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>,
-      <span class="num">{{ proposal.amount|floatformat:1 }}</span>
+    <p class="proposal-meta num">
+      <span>{{ proposal.amount|floatformat:1 }}</span>
       {% if proposal.product %}{{ proposal.product.get_base_unit_display }}{% else %}{{ proposal.get_new_base_unit_display }}{% endif %}
       → {{ proposal.get_meal_type_display }} · {{ proposal.date|date:"d.m.Y" }}
     </p>
   {% endif %}
 
   {% if not proposal.product and proposal.new_name %}
-    <p class="is-size-7 muted num">
-      На 100: {{ proposal.new_calories|floatformat:1 }} ккал ·
+    <p class="proposal-nutrition is-size-7 muted num">
+      На 100 г / мл: {{ proposal.new_calories|floatformat:1 }} ккал ·
       Б {{ proposal.new_proteins|floatformat:1 }} · Ж {{ proposal.new_fats|floatformat:1 }} · У {{ proposal.new_carbs|floatformat:1 }}
     </p>
     {% if proposal.status == "pending" and proposal.similar %}
-      <p class="is-size-7">
+      <p class="proposal-similar is-size-7">
         Похожие в Каталоге:
         {% for product in proposal.similar %}
           {% if proposal.kind == "entry" %}
-            <a href="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}">{{ product.name }}</a>{% if not forloop.last %}, {% endif %}
+            <a href="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}"
+               {% if in_chat %}hx-get="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}"
+               hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"{% endif %}>{{ product.name }}</a>{% if not forloop.last %}, {% endif %}
           {% else %}
             {{ product.name }}{% if not forloop.last %}, {% endif %}
           {% endif %}
@@ -33,23 +41,29 @@
   {% endif %}
 
   {% if proposal.status == "pending" %}
-    <div class="buttons mt-3">
-      <a class="btn-quiet" href="{% url 'assistant:proposal_edit' proposal.pk %}">Поправить</a>
-      <form method="post" action="{% url 'assistant:proposal_confirm' proposal.pk %}">
+    <div class="proposal-actions">
+      <a class="btn-quiet proposal-edit" href="{% url 'assistant:proposal_edit' proposal.pk %}"
+         {% if in_chat %}hx-get="{% url 'assistant:proposal_edit' proposal.pk %}"
+         hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"{% endif %}>Поправить</a>
+      <form class="proposal-confirm-form" method="post" action="{% url 'assistant:proposal_confirm' proposal.pk %}"
+            {% if in_chat %}hx-post="{% url 'assistant:proposal_confirm' proposal.pk %}"
+            hx-target="#feed" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']"{% endif %}>
         {% csrf_token %}
-        <button class="btn-quiet" type="submit">Подтвердить</button>
+        <button class="btn-main proposal-confirm" type="submit">Подтвердить</button>
       </form>
-      <form method="post" action="{% url 'assistant:proposal_reject' proposal.pk %}">
+      <form class="proposal-reject-form" method="post" action="{% url 'assistant:proposal_reject' proposal.pk %}"
+            {% if in_chat %}hx-post="{% url 'assistant:proposal_reject' proposal.pk %}"
+            hx-target="#feed" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']"{% endif %}>
         {% csrf_token %}
         <button class="btn-quiet" type="submit">Отклонить</button>
       </form>
     </div>
   {% elif proposal.status == "confirmed" %}
-    <p class="is-size-7 has-text-success">
+    <p class="proposal-state is-confirmed">
       Подтверждено
       {% if proposal.kind == "product" %}: Продукт добавлен в Каталог{% elif proposal.entry %}: запись добавлена в Дневник{% endif %}
     </p>
   {% else %}
-    <p class="is-size-7 muted">Отклонено, данные не созданы</p>
+    <p class="proposal-state">Отклонено, данные не созданы</p>
   {% endif %}
 </article>

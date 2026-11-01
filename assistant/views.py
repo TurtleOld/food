@@ -31,7 +31,7 @@ from assistant.proposals import (
     update_pending_proposal,
 )
 from assistant.tasks import execute_turn_task
-from core.htmx import FragmentMixin, HtmxLoginRequiredMixin
+from core.htmx import FragmentMixin, HtmxLoginRequiredMixin, sheet_saved_response, with_toasts
 from core.jobs import enqueue_on_commit
 from core.models import Product
 
@@ -122,6 +122,12 @@ class ProposalUpdateView(LoginRequiredMixin, UpdateView):
             member_id=self.request.user.pk, status=Proposal.Status.PENDING
         )
 
+    def get_template_names(self) -> list[str]:
+        """Из чата правка открывается шторкой, с отдельного адреса — обычной страницей."""
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return ["assistant/proposal_form.html#sheet"]
+        return super().get_template_names()
+
     def get_initial(self) -> dict[str, Any]:
         initial = super().get_initial()
         product_id = self.request.GET.get("product")
@@ -134,13 +140,28 @@ class ProposalUpdateView(LoginRequiredMixin, UpdateView):
                 initial["product"] = product
         return initial
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["cancel_url"] = reverse("assistant:proposals")
+        return context
+
+    def form_invalid(self, form: ModelForm[Any]) -> HttpResponse:
+        """Ошибки правки в шторке остаются в шторке, а не заменяют собой всю ленту."""
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return self.render_to_response(self.get_context_data(form=form))
+        return super().form_invalid(form)
+
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         try:
             update_pending_proposal(self.request.user, self.object.pk, form.cleaned_data)
         except ProposalNotFound as error:
             messages.error(self.request, str(error))
-            return redirect("assistant:proposals")
-        messages.success(self.request, "Предложение поправлено")
+        else:
+            messages.success(self.request, "Предложение поправлено")
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return sheet_saved_response(
+                self.request, "assistant/chat.html#feed", _chat_context(self.request.user), "#feed"
+            )
         return redirect("assistant:proposals")
 
 
@@ -161,6 +182,10 @@ class ProposalDecisionView(LoginRequiredMixin, View):
             messages.error(request, str(error))
         else:
             messages.success(request, self.success_message)
+        if request.htmx:  # type: ignore[attr-defined]
+            # Решение из карточки в чате обновляет ленту на месте, без ухода со страницы.
+            response = render(request, "assistant/chat.html#feed", _chat_context(request.user))
+            return with_toasts(response, request)
         return redirect("assistant:proposals")
 
 
@@ -192,6 +217,9 @@ def _chat_context(member: Any, form: ChatMessageForm | None = None) -> dict[str,
     return {
         "cards": cards,
         "active": any(card.turn.is_active for card in cards),
+        "pending_proposals": Proposal.objects.filter(
+            member_id=member.pk, status=Proposal.Status.PENDING
+        ).select_related("product"),
         "form": form or ChatMessageForm(),
         "photo_max_mb": max(1, settings.ASSISTANT_PHOTO_MAX_BYTES // (1024 * 1024)),
     }
@@ -210,8 +238,8 @@ class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
 
 
 def _chat_response(request: HttpRequest, form: ChatMessageForm | None = None) -> HttpResponse:
-    """Полная страница ленты или её фрагмент для htmx."""
-    template = "assistant/chat.html#feed" if request.htmx else "assistant/chat.html"  # type: ignore[attr-defined]
+    """Полная страница ленты или её фрагмент `chat` с лентой и формой для htmx."""
+    template = "assistant/chat.html#chat" if request.htmx else "assistant/chat.html"  # type: ignore[attr-defined]
     return render(request, template, _chat_context(request.user, form))
 
 
