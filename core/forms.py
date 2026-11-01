@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from django import forms
 from django.db import transaction
+from django.db.models import TextChoices
 from django.utils import timezone
 
 from core.barcodes import normalize_barcode
@@ -305,3 +306,53 @@ class DiaryEntrySheetForm(DiaryEntryForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
+
+
+class DiaryCopyForm(forms.Form):
+    """Копирование Записей дневника: день, Приём пищи или одна Запись в другой день."""
+
+    class Scope(TextChoices):
+        DAY = "day", "Весь день"
+        MEAL = "meal", "Приём пищи"
+        ENTRY = "entry", "Запись"
+
+    scope = forms.ChoiceField(choices=Scope.choices, widget=forms.HiddenInput)
+    source_date = DayField(label="Исходный день", required=False, widget=day_widget())
+    target_date = DayField(label="Целевой день", widget=day_widget())
+    meal_type = forms.ChoiceField(
+        choices=DiaryEntry.MealType.choices, required=False, widget=forms.HiddenInput
+    )
+    entry = forms.ModelChoiceField(
+        queryset=DiaryEntry.objects.none(), required=False, widget=forms.HiddenInput
+    )
+    target_meal_type = forms.ChoiceField(
+        choices=DiaryEntry.MealType.choices, required=False, widget=forms.RadioSelect
+    )
+    operation = forms.CharField(max_length=64, widget=forms.HiddenInput)
+
+    def __init__(self, *args: Any, member: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        cast(forms.ModelChoiceField, self.fields["entry"]).queryset = DiaryEntry.objects.filter(
+            member_id=member.pk
+        )
+
+    def clean(self) -> dict[str, Any] | None:
+        cleaned_data = super().clean()
+        if cleaned_data is None:
+            return cleaned_data
+        scope = cleaned_data.get("scope")
+        if scope == self.Scope.ENTRY:
+            entry = cleaned_data.get("entry")
+            if entry is None:
+                self.add_error("entry", "Запись не найдена")
+            else:
+                cleaned_data["source_date"] = entry.date
+                cleaned_data["target_meal_type"] = (
+                    cleaned_data.get("target_meal_type") or entry.meal_type
+                )
+        elif scope in (self.Scope.DAY, self.Scope.MEAL):
+            if cleaned_data.get("source_date") is None:
+                self.add_error("source_date", "Укажите исходный день")
+            if scope == self.Scope.MEAL and not cleaned_data.get("meal_type"):
+                self.add_error("meal_type", "Выберите приём пищи")
+        return cleaned_data
