@@ -8,6 +8,7 @@ _SECTION_BY_PREFIX = {
     "products": "products",
     "barcodes": "products",
     "target": "target",
+    "assistant": "assistant",
 }
 
 
