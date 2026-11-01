@@ -11,6 +11,7 @@ dependencies = [
     "whitenoise>=6.8,<7",
     "django-htmx>=1.29.0",
     "django-tasks-db>=0.13,<0.14",
+    "pywebpush>=2.5.0",
 ]
 
 [dependency-groups]
@@ -60,6 +61,10 @@ disallow_incomplete_defs = false
 module = "assistant.tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = "pywebpush.*"
+ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings.dev"

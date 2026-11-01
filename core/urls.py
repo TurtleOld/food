@@ -37,6 +37,22 @@ urlpatterns = [
     path("undo/", views.UndoView.as_view(), name="undo"),
     path("target/", views.DailyTargetUpdateView.as_view(), name="daily_target_edit"),
     path("profile/", views.ProfileView.as_view(), name="profile"),
+    path("notifications/", views.NotificationSettingsView.as_view(), name="notifications"),
+    path(
+        "notifications/settings/",
+        views.PushSettingsView.as_view(),
+        name="push_settings",
+    ),
+    path(
+        "notifications/subscribe/",
+        views.PushSubscribeView.as_view(),
+        name="push_subscribe",
+    ),
+    path(
+        "notifications/unsubscribe/",
+        views.PushUnsubscribeView.as_view(),
+        name="push_unsubscribe",
+    ),
     path("login/", auth_views.LoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("healthz", views.HealthzView.as_view(), name="healthz"),

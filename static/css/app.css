@@ -23,6 +23,11 @@
   }
 }
 
+/* Author display rules on buttons and help text would otherwise override [hidden]. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   background: var(--page);

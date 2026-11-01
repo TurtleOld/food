@@ -120,8 +120,9 @@ class DiaryPrivacyTest(TestCase):
     """Day pages belong to the signed-in account and are never shared."""
 
     def setUp(self):
-        self.alice = User.objects.create_user(username="alice", password="alice-pass")
-        self.bob = User.objects.create_user(username="bob", password="bob-pass")
+        # Hyphens keep these names out of randomly generated CSRF tokens (alphanumeric only).
+        self.alice = User.objects.create_user(username="alice-1", password="alice-pass")
+        self.bob = User.objects.create_user(username="bob-2", password="bob-pass")
 
     def test_members_see_only_their_own_diary(self):
         alice = Client()
@@ -132,10 +133,10 @@ class DiaryPrivacyTest(TestCase):
         alice_page = alice.get(reverse("core:day")).content.decode()
         bob_page = bob.get(reverse("core:day")).content.decode()
 
-        self.assertIn("alice", alice_page)
-        self.assertNotIn("bob", alice_page)
-        self.assertIn("bob", bob_page)
-        self.assertNotIn("alice", bob_page)
+        self.assertIn("alice-1", alice_page)
+        self.assertNotIn("bob-2", alice_page)
+        self.assertIn("bob-2", bob_page)
+        self.assertNotIn("alice-1", bob_page)
 
     def test_another_members_diary_has_no_route(self):
         self.client.force_login(self.alice)
@@ -153,7 +154,7 @@ class DiaryPrivacyTest(TestCase):
         """
         self.client.post(
             reverse("core:login"),
-            {"username": "alice", "password": "alice-pass"},
+            {"username": "alice-1", "password": "alice-pass"},
         )
         session_key = self.client.cookies[settings.SESSION_COOKIE_NAME].value
 
@@ -162,5 +163,5 @@ class DiaryPrivacyTest(TestCase):
         response = restarted.get(reverse("core:day"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "alice")
+        self.assertContains(response, "alice-1")
         self.assertTrue(Session.objects.filter(session_key=session_key).exists())
