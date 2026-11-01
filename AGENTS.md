@@ -26,6 +26,7 @@
 - Docstrings are Google style, in Russian, on public modules, classes and functions whose purpose the name does not already tell (`ruff` checks the format, not the presence).
 - Delete dead code instead of commenting it out; git keeps the history.
 - Tests assert behaviour through the HTTP seam (`django.test.Client`): responses, headers, database state. They never assert template, partial or internal function names; htmx target `id`s are a contract and may be asserted.
+- Exception: LLM budget accounting, the provider gateway and the background queue may use direct behavioural tests of domain functions and database state. Screens and user actions still use `django.test.Client`.
 
 ## Agent skills
 
