@@ -1,0 +1,55 @@
+<article class="box proposal" id="proposal-{{ proposal.pk }}">
+  {% if proposal.kind == "product" %}
+    <p>
+      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>
+      — новый Продукт
+    </p>
+  {% else %}
+    <p>
+      <b>{% if proposal.product %}{{ proposal.product.name }}{% else %}{{ proposal.product_name }}{% endif %}</b>,
+      <span class="num">{{ proposal.amount|floatformat:1 }}</span>
+      {% if proposal.product %}{{ proposal.product.get_base_unit_display }}{% else %}{{ proposal.get_new_base_unit_display }}{% endif %}
+      → {{ proposal.get_meal_type_display }} · {{ proposal.date|date:"d.m.Y" }}
+    </p>
+  {% endif %}
+
+  {% if not proposal.product and proposal.new_name %}
+    <p class="is-size-7 muted num">
+      На 100: {{ proposal.new_calories|floatformat:1 }} ккал ·
+      Б {{ proposal.new_proteins|floatformat:1 }} · Ж {{ proposal.new_fats|floatformat:1 }} · У {{ proposal.new_carbs|floatformat:1 }}
+    </p>
+    {% if proposal.status == "pending" and proposal.similar %}
+      <p class="is-size-7">
+        Похожие в Каталоге:
+        {% for product in proposal.similar %}
+          {% if proposal.kind == "entry" %}
+            <a href="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}">{{ product.name }}</a>{% if not forloop.last %}, {% endif %}
+          {% else %}
+            {{ product.name }}{% if not forloop.last %}, {% endif %}
+          {% endif %}
+        {% endfor %}
+      </p>
+    {% endif %}
+  {% endif %}
+
+  {% if proposal.status == "pending" %}
+    <div class="buttons mt-3">
+      <a class="btn-quiet" href="{% url 'assistant:proposal_edit' proposal.pk %}">Поправить</a>
+      <form method="post" action="{% url 'assistant:proposal_confirm' proposal.pk %}">
+        {% csrf_token %}
+        <button class="btn-quiet" type="submit">Подтвердить</button>
+      </form>
+      <form method="post" action="{% url 'assistant:proposal_reject' proposal.pk %}">
+        {% csrf_token %}
+        <button class="btn-quiet" type="submit">Отклонить</button>
+      </form>
+    </div>
+  {% elif proposal.status == "confirmed" %}
+    <p class="is-size-7 has-text-success">
+      Подтверждено
+      {% if proposal.kind == "product" %}: Продукт добавлен в Каталог{% elif proposal.entry %}: запись добавлена в Дневник{% endif %}
+    </p>
+  {% else %}
+    <p class="is-size-7 muted">Отклонено, данные не созданы</p>
+  {% endif %}
+</article>

@@ -23,6 +23,11 @@
   }
 }
 
+/* Author display rules on buttons and help text would otherwise override [hidden]. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   background: var(--page);
@@ -405,6 +410,12 @@ body {
 
 .add-meal:hover {
   color: var(--bulma-text-strong);
+}
+
+.meal-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 @media (min-width: 1024px) {
