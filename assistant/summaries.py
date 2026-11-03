@@ -352,7 +352,7 @@ def due_summaries(
     local_time = local.time().replace(second=0, microsecond=0)
     week_start = today - datetime.timedelta(days=today.weekday())
     due: list[tuple[int, str, datetime.date]] = []
-    members = get_user_model().objects.filter(is_active=True)
+    members = get_user_model().objects.filter(is_active=True).order_by("pk")
     for member in members:
         summary_settings = SummarySettings.for_member(member)
         candidates: list[tuple[str, datetime.date, bool]] = [
