@@ -3,7 +3,7 @@ from typing import Any, cast
 from django import forms
 from django.conf import settings
 
-from assistant.models import LLMSettings, Proposal
+from assistant.models import LLMSettings, Proposal, SummarySettings
 from assistant.photos import PhotoError, prepare_photo
 from core.forms import DayField, day_widget
 from core.models import DiaryEntry, Product
@@ -95,6 +95,18 @@ class ProposalForm(forms.ModelForm):
             "meal_type",
         ]
         field_classes = {"date": DayField}
+        labels = {
+            "product": "Продукт Каталога",
+            "new_name": "Название",
+            "new_base_unit": "Единица",
+            "new_calories": "Калории",
+            "new_proteins": "Белки",
+            "new_fats": "Жиры",
+            "new_carbs": "Углеводы",
+            "amount": "Количество",
+            "date": "День",
+            "meal_type": "Приём пищи",
+        }
         widgets = {
             "date": day_widget(),
             "meal_type": forms.RadioSelect,
@@ -108,7 +120,9 @@ class ProposalForm(forms.ModelForm):
             "name"
         )
         cast(forms.ChoiceField, self.fields["meal_type"]).choices = DiaryEntry.MealType.choices
-        self.fields["product"].widget.attrs.setdefault("class", "input")
+        self.fields["product"].widget.attrs.update(
+            {"class": "input", "x-on:change": "existing = $event.target.value"}
+        )
         self.fields["new_name"].widget.attrs.setdefault("class", "input")
         self.fields["amount"].widget.attrs.update(
             {"class": "input num", "step": "0.1", "min": "0.1", "inputmode": "decimal"}
@@ -194,13 +208,24 @@ class ChatMessageForm(forms.Form):
         label="Сообщение",
         widget=forms.Textarea(
             attrs={
-                "class": "input",
+                "class": "input chat-text",
                 "rows": 2,
                 "placeholder": "Спросите про КБЖУ или добавьте запись…",
             }
         ),
     )
-    photo = forms.FileField(required=False, label="Фото")
+    # `accept="image/*"` открывает на телефоне выбор камеры или галереи, а на ПК — файл.
+    photo = forms.FileField(
+        required=False,
+        label="Фото",
+        widget=forms.ClearableFileInput(
+            attrs={
+                "class": "chat-file",
+                "accept": "image/*",
+                "aria-describedby": "photo-help",
+            }
+        ),
+    )
 
     def clean(self) -> dict[str, Any] | None:
         cleaned_data = super().clean()
@@ -217,3 +242,33 @@ class ChatMessageForm(forms.Form):
             except PhotoError as error:
                 self.add_error("photo", str(error))
         return cleaned_data
+
+
+class SummarySettingsForm(forms.ModelForm):
+    """Личное расписание Сводок: включение и местное время каждого вида."""
+
+    class Meta:
+        model = SummarySettings
+        fields = ["evening_enabled", "evening_time", "weekly_enabled", "weekly_time"]
+        labels = {
+            "evening_enabled": "Вечерняя сводка",
+            "evening_time": "Время вечерней сводки",
+            "weekly_enabled": "Недельная сводка",
+            "weekly_time": "Время недельной сводки",
+        }
+        help_texts = {
+            "evening_enabled": "КБЖУ дня, сравнение с целью и вчерашним днём.",
+            "weekly_enabled": "Семь дней, среднее за день и динамика веса по Замерам.",
+        }
+        widgets = {
+            "evening_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+            "weekly_time": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field, forms.BooleanField):
+                field.widget.attrs.setdefault("class", "checkbox")
+            else:
+                field.widget.attrs.setdefault("class", "input num")

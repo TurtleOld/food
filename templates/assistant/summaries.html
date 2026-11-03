@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Сводки{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="title is-3">Сводки</h1>
+    <div class="page-head-links">
+      <a class="btn-quiet" href="{% url 'assistant:chat' %}">Ассистент</a>
+      <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
+    </div>
+  </div>
+
+  <form method="post" class="box">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div class="field mb-4">
+        <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<p class="help is-size-7 muted">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="help is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <button class="btn-quiet mt-2" type="submit">Сохранить</button>
+  </form>
+
+  <p class="muted is-size-7 mt-3">
+    Время местное. Сводка приходит в ленту Ассистента; Push — только на устройства,
+    где вы включили уведомления. Отправленный текст не меняется после новых Записей.
+  </p>
+{% endblock %}

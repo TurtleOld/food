@@ -221,7 +221,61 @@ class ChatShellTest(ChatTestCase):
 
         self.assertContains(page, "Дай совет")
         self.assertContains(page, "Пейте воду.")
+        self.assertContains(page, 'class="is-sr-only"')
         self.assertNotContains(page, "Ассистент думает")
+
+
+class ChatScreenTest(ChatTestCase):
+    """Экран чата: навигация, фото, ожидание и опрос через HTTP."""
+
+    def test_chat_is_a_separate_navigation_item(self):
+        day = self.client.get(reverse("core:day"))
+
+        self.assertContains(day, f'href="{reverse("assistant:chat")}"', count=2)
+        self.assertContains(day, "Ассистент")
+
+        chat = self.client.get(reverse("assistant:chat"))
+        self.assertContains(chat, 'aria-current="page"', count=2)
+
+    def test_photo_field_accepts_camera_gallery_and_file(self):
+        page = self.client.get(reverse("assistant:chat"))
+
+        self.assertContains(page, 'type="file"')
+        self.assertContains(page, 'name="photo"')
+        self.assertContains(page, 'accept="image/*"')
+        self.assertContains(page, "Камера, галерея или файл")
+        self.assertContains(page, "до 5 МБ")
+
+    def test_one_feed_poller_and_an_announced_waiting_state(self):
+        self.send("Привет")
+
+        page = self.client.get(reverse("assistant:chat"))
+
+        self.assertContains(page, 'hx-trigger="every 2s"', count=1)
+        self.assertContains(page, 'hx-target="#feed"')
+        self.assertContains(page, 'aria-busy="true"')
+        self.assertContains(page, 'role="status"')
+        self.assertContains(page, "Ассистент думает")
+
+    def test_polling_returns_only_the_feed_so_typed_text_is_never_replaced(self):
+        self.send("Привет")
+
+        poll = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+
+        self.assertContains(poll, 'id="feed"')
+        self.assertNotContains(poll, 'id="chat-composer"')
+        self.assertNotContains(poll, "<html")
+
+    def test_htmx_send_returns_the_chat_with_feed_and_composer(self):
+        response = self.client.post(
+            reverse("assistant:chat_send"),
+            {"text": "Привет"},
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertContains(response, 'id="chat"')
+        self.assertContains(response, 'id="chat-composer"')
+        self.assertNotContains(response, "<html")
 
 
 class PhotoTest(ChatTestCase):
@@ -332,6 +386,7 @@ class FailureAndRetryTest(ChatTestCase):
         page = self.client.get(reverse("assistant:chat"))
         self.assertContains(page, "не настроен")
         self.assertContains(page, "Повторить")
+        self.assertContains(page, 'role="alert"')
 
     def test_provider_error_fails_the_turn_and_allows_an_explicit_retry(self):
         self.send("Привет")

@@ -5,8 +5,10 @@
 {% block content %}
   <div class="page-head">
     <h1 class="title is-3">Предложения</h1>
-    <a class="btn-quiet" href="{% url 'assistant:chat' %}">Ассистент</a>
-    <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
+    <div class="page-head-links">
+      <a class="btn-quiet" href="{% url 'assistant:chat' %}">Ассистент</a>
+      <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
+    </div>
   </div>
 
   <h2 class="title is-5">Ждут решения</h2>
