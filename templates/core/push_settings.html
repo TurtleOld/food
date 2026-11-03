@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки Push{% endblock %}
+
+{% block content %}
+  <div class="page-head">
+    <h1 class="title is-3">Настройки Push</h1>
+    <a class="btn-quiet" href="{% url 'core:notifications' %}">К уведомлениям</a>
+  </div>
+
+  <form method="post" class="box">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% if masked_private_key %}
+      <p class="muted is-size-7 mb-4">
+        Сохранённый приватный ключ: <span class="num">{{ masked_private_key }}</span>
+      </p>
+    {% endif %}
+    {% for field in form %}
+      <div class="field mb-4">
+        <label class="label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<p class="help is-size-7 muted">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="help is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <p class="help is-size-7 muted">
+      Ключи генерируются один раз на окружение; их смена обнуляет все подписки устройств.
+    </p>
+    <button class="btn-quiet mt-2" type="submit">Сохранить</button>
+  </form>
+{% endblock %}

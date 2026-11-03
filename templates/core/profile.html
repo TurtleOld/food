@@ -60,6 +60,12 @@
           {% endfor %}
         </div>
       {% endif %}
+
+      <div class="box mt-4">
+        <h2 class="title is-5">Уведомления</h2>
+        <p class="muted">Сводки можно получать Push-уведомлениями на свои устройства.</p>
+        <a class="btn-quiet mt-3" href="{% url 'core:notifications' %}">Настроить уведомления</a>
+      </div>
     </div>
 
     <div class="column is-6">

@@ -113,5 +113,17 @@ TASKS = {
 TASKS_STUCK_AFTER_MINUTES = int(os.environ.get("TASKS_STUCK_AFTER_MINUTES", "30"))
 TASKS_RESULT_RETENTION_DAYS = int(os.environ.get("TASKS_RESULT_RETENTION_DAYS", "14"))
 
+# Фото хода Ассистента хранится в БД только до конца хода: web и воркер очереди —
+# разные контейнеры с разными файловыми системами. После ответа или ошибки байты
+# фото удаляются.
+ASSISTANT_PHOTO_MAX_BYTES = 5 * 1024 * 1024
+ASSISTANT_PHOTO_MAX_SIDE = 1600
+ASSISTANT_MESSAGE_MAX_CHARS = 4000
+ASSISTANT_HISTORY_MESSAGES = 30
+ASSISTANT_HISTORY_CHARS = 8000
+ASSISTANT_MAX_TOOL_ROUNDS = 4
+ASSISTANT_MAX_TOOL_CALLS = 8
+ASSISTANT_FEED_TURNS = 50
+
 # Контакт для User-Agent запросов к Open Food Facts: их правила требуют указать приложение и связь.
 OFF_CONTACT = os.environ.get("OFF_CONTACT", "dev@pavlovteam.ru")

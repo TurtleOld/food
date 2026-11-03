@@ -124,6 +124,28 @@ class ServiceWorkerContentTest(TestCase):
         with override_settings(DEBUG=False):
             self.assertIn("const BYPASS_CACHE = false;", self.fetch())
 
+    def test_worker_shows_every_push_notification(self):
+        body = self.fetch()
+
+        self.assertIn('addEventListener("push"', body)
+        self.assertIn("event.data.json()", body)
+        self.assertIn("showNotification", body)
+        self.assertIn("notification.navigate", body)
+        self.assertIn('tag: notification.tag || "summary"', body)
+
+    def test_notification_click_focuses_or_opens_the_app(self):
+        body = self.fetch()
+
+        self.assertIn('addEventListener("notificationclick"', body)
+        self.assertIn("event.notification.close()", body)
+        self.assertIn("target.origin !== self.location.origin", body)
+        self.assertIn("client.focus()", body)
+        self.assertIn("self.clients.openWindow", body)
+
+    @hashed_storage(SuffixedStaticStorage)
+    def test_push_icon_uses_the_hashed_static_url(self):
+        self.assertIn("/static/icons/icon-192.abc123.png", self.fetch())
+
 
 class PwaIdentityTest(TestCase):
     def manifest(self):
@@ -135,6 +157,7 @@ class PwaIdentityTest(TestCase):
     def test_manifest_fields(self):
         manifest = self.manifest()
 
+        self.assertEqual(manifest["id"], "/")
         self.assertEqual(manifest["display"], "standalone")
         self.assertNotIn("orientation", manifest)
         self.assertEqual(manifest["theme_color"], "#f7f9fa")

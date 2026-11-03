@@ -1,6 +1,7 @@
 import datetime
 from collections.abc import Iterable
 from decimal import Decimal
+from typing import Any
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -244,3 +245,63 @@ class DailyTarget(models.Model):
 
     def __str__(self) -> str:
         return f"Цель {self.member.username}"
+
+
+class PushSettings(models.Model):
+    """Единственные на семью VAPID-настройки Web Push; меняет администратор в UI."""
+
+    SINGLETON_PK = 1
+
+    vapid_public_key = models.CharField(max_length=500, blank=True)
+    vapid_private_key = models.CharField(max_length=2000, blank=True)
+    vapid_subject = models.CharField(max_length=500, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "push settings"
+
+    def __str__(self) -> str:
+        return "Push настроен" if self.is_configured else "Push не настроен"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Не даёт создать вторую строку: все правки идут в строку с постоянным pk."""
+        self.pk = self.SINGLETON_PK
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def current(cls) -> "PushSettings":
+        """Возвращает единственную строку настроек, создавая её при первом обращении."""
+        settings, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return settings
+
+    @property
+    def is_configured(self) -> bool:
+        """Push работает только при полном наборе VAPID-настроек."""
+        return bool(self.vapid_public_key and self.vapid_private_key and self.vapid_subject)
+
+    @property
+    def masked_private_key(self) -> str:
+        """Приватный ключ для экрана администратора: только последние четыре знака."""
+        if len(self.vapid_private_key) <= 4:
+            return "•" * len(self.vapid_private_key)
+        return f"••••{self.vapid_private_key[-4:]}"
+
+
+class PushSubscription(models.Model):
+    """Подписка устройства Члена семьи на Web Push; endpoint уникален."""
+
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=2048, unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"Подписка {self.member.username}"

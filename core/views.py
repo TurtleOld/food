@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.models import AnonymousUser
 from django.db import transaction
 from django.db.models import ProtectedError, QuerySet
@@ -74,6 +75,9 @@ from core.forms import (
     ProductCreateForm,
     ProductEditForm,
     ProfileForm,
+    PushSettingsForm,
+    PushSubscriptionForm,
+    PushUnsubscribeForm,
     TargetAdjustmentForm,
     WeightMeasurementForm,
 )
@@ -90,10 +94,14 @@ from core.models import (
     DiaryEntry,
     Product,
     Profile,
+    PushSettings,
+    PushSubscription,
     WeightMeasurement,
 )
 from core.off import OffLookup, Outcome, lookup
 from core.profile import MIN_ADULT_AGE, bmi_value, latest_weight, target_suggestion
+from core.push import subscribe as push_subscribe
+from core.push import unsubscribe as push_unsubscribe
 from core.pwa import cache_name, precache_urls
 from core.undo import add_undo_message, restore
 
@@ -788,6 +796,95 @@ class ProfileView(HtmxLoginRequiredMixin, FormView):
         return context
 
 
+class NotificationSettingsView(HtmxLoginRequiredMixin, TemplateView):
+    """Страница согласия на Web Push: состояние подписок и кнопки вкл/выкл."""
+
+    template_name = "core/notifications.html"
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        member_id = cast(int, self.request.user.pk)
+        push_settings = PushSettings.current()
+        context.update(
+            push_configured=push_settings.is_configured,
+            vapid_public_key=(
+                push_settings.vapid_public_key if push_settings.is_configured else ""
+            ),
+            subscription_count=PushSubscription.objects.filter(member_id=member_id).count(),
+            can_edit_push=self.request.user.is_staff,
+        )
+        return context
+
+
+class PushSubscribeView(HtmxLoginRequiredMixin, FormView):
+    """Сохраняет подписку браузера, отправленную после явного согласия."""
+
+    form_class = PushSubscriptionForm
+    http_method_names = ["post"]
+    success_url = reverse_lazy("core:notifications")
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        push_subscribe(
+            member_id=cast(int, self.request.user.pk),
+            endpoint=form.cleaned_data["endpoint"],
+            p256dh=form.cleaned_data["p256dh"],
+            auth=form.cleaned_data["auth"],
+        )
+        messages.success(self.request, "Уведомления включены на этом устройстве")
+        return super().form_valid(form)
+
+    def form_invalid(self, form: Form) -> HttpResponse:
+        messages.error(self.request, "Не удалось включить уведомления: проверьте данные браузера")
+        return redirect(self.success_url)
+
+
+class PushUnsubscribeView(HtmxLoginRequiredMixin, FormView):
+    """Удаляет подписку текущего устройства или все подписки Члена семьи."""
+
+    form_class = PushUnsubscribeForm
+    http_method_names = ["post"]
+    success_url = reverse_lazy("core:notifications")
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        removed = push_unsubscribe(
+            member_id=cast(int, self.request.user.pk),
+            endpoint=form.cleaned_data["endpoint"] or None,
+        )
+        if removed:
+            messages.success(self.request, "Уведомления выключены")
+        else:
+            messages.info(self.request, "Уведомления уже выключены")
+        return super().form_valid(form)
+
+    def form_invalid(self, form: Form) -> HttpResponse:
+        messages.error(self.request, "Не удалось выключить уведомления")
+        return redirect(self.success_url)
+
+
+class PushSettingsView(HtmxLoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    """VAPID-настройки Push в БД; меняет только администратор семьи."""
+
+    form_class = PushSettingsForm
+    template_name = "core/push_settings.html"
+    success_url = reverse_lazy("core:notifications")
+    raise_exception = True
+
+    def test_func(self) -> bool:
+        return bool(self.request.user.is_staff)
+
+    def get_object(self, queryset: QuerySet[PushSettings] | None = None) -> PushSettings:
+        return PushSettings.current()
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["masked_private_key"] = self.object.masked_private_key
+        return context
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        messages.success(self.request, "Настройки Push сохранены")
+        return super().form_valid(form)
+
+
 class HealthzView(View):
     """Сообщает, что процесс приложения жив."""
 
@@ -812,6 +909,7 @@ class ServiceWorkerView(View):
                 "precache_json": json.dumps(urls),
                 "cache_name": cache_name(urls),
                 "offline_url": static("offline.html"),
+                "notification_icon": static("icons/icon-192.png"),
                 "static_prefix": static(""),
                 "bypass_cache": settings.DEBUG,
             },
