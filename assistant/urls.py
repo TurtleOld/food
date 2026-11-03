@@ -7,6 +7,7 @@ app_name = "assistant"
 urlpatterns = [
     path("", views.BudgetView.as_view(), name="budget"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
+    path("summaries/", views.SummarySettingsView.as_view(), name="summaries"),
     path("chat/", views.ChatView.as_view(), name="chat"),
     path("chat/send/", views.ChatSendView.as_view(), name="chat_send"),
     path("proposals/", views.ProposalListView.as_view(), name="proposals"),

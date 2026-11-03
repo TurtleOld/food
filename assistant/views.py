@@ -21,8 +21,13 @@ from assistant.chat import (
     start_turn,
     turn_cards,
 )
-from assistant.forms import ChatMessageForm, LLMSettingsForm, ProposalForm
-from assistant.models import Conversation, LLMSettings, Proposal
+from assistant.forms import (
+    ChatMessageForm,
+    LLMSettingsForm,
+    ProposalForm,
+    SummarySettingsForm,
+)
+from assistant.models import Conversation, LLMSettings, Proposal, SummarySettings
 from assistant.proposals import (
     ProposalError,
     ProposalNotFound,
@@ -84,6 +89,21 @@ class SettingsView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
 
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         messages.success(self.request, "Настройки сохранены")
+        return super().form_valid(form)
+
+
+class SummarySettingsView(LoginRequiredMixin, UpdateView):
+    """Расписание Сводок текущего Члена семьи; каждый меняет только своё."""
+
+    form_class = SummarySettingsForm
+    template_name = "assistant/summaries.html"
+    success_url = reverse_lazy("assistant:summaries")
+
+    def get_object(self, queryset: QuerySet[SummarySettings] | None = None) -> SummarySettings:
+        return SummarySettings.for_member(self.request.user)
+
+    def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
+        messages.success(self.request, "Расписание сводок сохранено")
         return super().form_valid(form)
 
 
