@@ -1,21 +1,123 @@
 {% extends "base.html" %}
+{% load l10n %}
 
 {% block title %}Правка предложения{% endblock %}
 
 {% block content %}
-  <div class="page-head">
-    <h1 class="title is-3">
-      {% if proposal.kind == "product" %}Правка Предложения Продукта{% else %}Правка Предложения Записи{% endif %}
-    </h1>
-  </div>
-
-  <form method="post" class="box">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-    {{ form.as_p }}
-    <div class="buttons mt-4">
-      <button class="btn-quiet" type="submit">Сохранить</button>
-      <a class="btn-quiet" href="{% url 'assistant:proposals' %}">Отмена</a>
+  {% if not request.htmx %}
+    <div class="page-head">
+      <h1 class="title is-3">
+        {% if proposal.kind == "product" %}Правка Предложения Продукта{% else %}Правка Предложения Записи{% endif %}
+      </h1>
+      <a class="btn-quiet" href="{{ cancel_url }}">К предложениям</a>
     </div>
-  </form>
+  {% endif %}
+  {% partialdef sheet %}
+    <div id="proposal-form" class="proposal-form">
+      <form method="post" action="{{ request.path }}" class="proposal-form{% if not request.htmx %} box{% endif %}"
+            {% if proposal.kind == "entry" %}x-data="{ existing: '{{ form.product.value|default:'' }}' }"{% endif %}
+            {% if request.htmx %}hx-post="{{ request.path }}" hx-target="#sheet-body" hx-swap="innerHTML"
+            hx-disabled-elt="find button[type='submit']"{% endif %}>
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+
+        {% if request.htmx %}
+          <h2 class="title is-4">
+            {% if proposal.kind == "product" %}Правка Предложения Продукта{% else %}Правка Предложения Записи{% endif %}
+          </h2>
+        {% endif %}
+        {% if form.non_field_errors %}
+          <div class="chat-error" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        {% if proposal.kind == "entry" %}
+          <div class="field">
+            <label class="label" for="{{ form.product.id_for_label }}">{{ form.product.label }}</label>
+            <div class="select is-fullwidth">{{ form.product }}</div>
+            <p class="help">Оставьте «Новый продукт», если его ещё нет в Каталоге.</p>
+            {% for error in form.product.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+          </div>
+        {% endif %}
+
+        <fieldset class="proposal-new"{% if proposal.kind == "entry" %} x-show="!existing"{% endif %}>
+          <legend class="label">
+            {% if proposal.kind == "product" %}Данные Продукта{% else %}Новый продукт{% endif %}
+          </legend>
+          <div class="field">
+            <label class="label" for="{{ form.new_name.id_for_label }}">{{ form.new_name.label }}</label>
+            {{ form.new_name }}
+            {% for error in form.new_name.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+          </div>
+
+          <div class="chips" role="radiogroup" aria-label="Единица нового Продукта">
+            {% for radio in form.new_base_unit %}
+              {% if radio.data.value != "" %}<label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endif %}
+            {% endfor %}
+          </div>
+          {% for error in form.new_base_unit.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+          <p class="muted is-size-7 mt-3 mb-2">КБЖУ на 100 г / мл</p>
+          <div class="nutrition-fields">
+            <div class="field">
+              <label class="label" for="{{ form.new_calories.id_for_label }}">{{ form.new_calories.label }}</label>
+              {{ form.new_calories }}
+              {% for error in form.new_calories.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+            </div>
+            <div class="field">
+              <label class="label" for="{{ form.new_proteins.id_for_label }}">{{ form.new_proteins.label }}</label>
+              {{ form.new_proteins }}
+              {% for error in form.new_proteins.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+            </div>
+            <div class="field">
+              <label class="label" for="{{ form.new_fats.id_for_label }}">{{ form.new_fats.label }}</label>
+              {{ form.new_fats }}
+              {% for error in form.new_fats.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+            </div>
+            <div class="field">
+              <label class="label" for="{{ form.new_carbs.id_for_label }}">{{ form.new_carbs.label }}</label>
+              {{ form.new_carbs }}
+              {% for error in form.new_carbs.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+            </div>
+          </div>
+        </fieldset>
+
+        {% if proposal.kind == "entry" %}
+          <div class="field">
+            <label class="label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>
+            <div class="amount">
+              <input class="amount-input num" type="number" name="amount" step="0.1" min="0.1"
+                     inputmode="decimal" value="{{ form.amount.value|default_if_none:''|unlocalize }}"
+                     aria-label="Количество">
+              {% if proposal.product %}<span class="muted">{{ proposal.product.get_base_unit_display }}</span>{% else %}<span class="muted is-size-7">г / мл</span>{% endif %}
+            </div>
+            {% for error in form.amount.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+          </div>
+
+          <div class="chips" role="radiogroup" aria-label="Приём пищи">
+            {% for radio in form.meal_type %}
+              <label class="chip">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+          {% for error in form.meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+
+          <label class="field-day">
+            <span class="muted is-size-7">{{ form.date.label }}</span>
+            {{ form.date }}
+          </label>
+          {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
+        {% endif %}
+
+        <div class="proposal-form-actions">
+          <button class="btn-main proposal-save" type="submit">Сохранить</button>
+          {% if request.htmx %}
+            <button class="btn-quiet" type="button" @click="closeSheet()">Отмена</button>
+          {% else %}
+            <a class="btn-quiet" href="{{ cancel_url }}">Отмена</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  {% endpartialdef %}
+
+  {% partial sheet %}
 {% endblock %}
