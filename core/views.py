@@ -910,7 +910,7 @@ class ServiceWorkerView(View):
                 "cache_name": cache_name(urls),
                 "offline_url": static("offline.html"),
                 "notification_icon": static("icons/icon-192.png"),
-                "static_prefix": static(""),
+                "static_prefix": "/" + settings.STATIC_URL.removeprefix("/"),
                 "bypass_cache": settings.DEBUG,
             },
             content_type="application/javascript",
