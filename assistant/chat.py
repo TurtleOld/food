@@ -36,13 +36,39 @@ from assistant.tools import TOOLS, dispatch_tool
 
 logger = logging.getLogger(__name__)
 
+WEEKDAYS = (
+    "понедельник",
+    "вторник",
+    "среда",
+    "четверг",
+    "пятница",
+    "суббота",
+    "воскресенье",
+)
+
 SYSTEM_PROMPT = (
     "Ты — Ассистент семейного трекера КБЖУ. Отвечай по-русски, кратко и по делу. "
     "Данные Дневника, Профиля и Каталога получай только инструментами и не выдумывай КБЖУ. "
     "Новые Продукты и Записи Дневника создавай только Предложением и сам ничего не подтверждай. "
-    "Если человек не назвал дату или Приём пищи, спроси их до создания Предложения. "
+    "Если человек не назвал Приём пищи, спроси его до создания Предложения. "
+    "Сегодня — {date}, {weekday}. Если человек не назвал дату, считай сегодняшнюю, "
+    "поставь её в Предложение и явно напиши: «дата не указана, считаю сегодня — {date}». "
+    "Явно названная дата всегда важнее. Слова «сегодня», «вчера», «позавчера» и диапазоны "
+    "считай от текущей даты. "
     "По фото без этикетки количество в граммах или миллилитрах называет человек: не угадывай его."
 )
+
+
+def system_prompt(today: datetime.date | None = None) -> str:
+    """Системная роль с текущей локальной датой и днём недели.
+
+    Args:
+        today: дата для подстановки; по умолчанию — дата приложения из `timezone.localdate()`.
+    """
+    day = today or timezone.localdate()
+    return SYSTEM_PROMPT.format(date=day.strftime("%d.%m.%Y"), weekday=WEEKDAYS[day.weekday()])
+
+
 PROVIDER_FAILED = "Ассистент не ответил: провайдер модели недоступен. Попробуйте ещё раз."
 EMPTY_ANSWER = "Ассистент вернул пустой ответ. Попробуйте ещё раз."
 TOO_MANY_STEPS = "Ассистент сделал слишком много шагов за один ход. Попробуйте ещё раз."
@@ -102,7 +128,7 @@ def _overflow_message(text: str, has_photo: bool) -> str:
 def _request_head_tokens(text: str, has_photo: bool) -> int:
     """Неизменяемая часть запроса: системная роль, схемы инструментов и текущее сообщение."""
     return (
-        message_tokens({"role": "system", "content": SYSTEM_PROMPT})
+        message_tokens({"role": "system", "content": system_prompt()})
         + tools_tokens(TOOLS)
         + user_message_tokens(text, has_photo)
     )
@@ -261,15 +287,16 @@ def build_prompt(turn: Turn) -> list[dict[str, Any]]:
     provider = LLMSettings.current()
     content = _user_content(message)
     has_photo = message.has_image and bool(message.photo)
+    system = system_prompt()
     fixed = (
-        message_tokens({"role": "system", "content": SYSTEM_PROMPT})
+        message_tokens({"role": "system", "content": system})
         + tools_tokens(TOOLS)
         + message_tokens({"role": "user", "content": content})
     )
     if provider.is_configured and fixed > provider.max_input_tokens:
         raise ChatError(_overflow_message(message.text, has_photo))
     history_budget = max(0, provider.max_input_tokens - fixed - TOOL_CONTEXT_RESERVE_TOKENS)
-    prompt: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    prompt: list[dict[str, Any]] = [{"role": "system", "content": system}]
     prompt.extend(_history(turn.conversation, turn, max_tokens=history_budget))
     prompt.append({"role": "user", "content": content})
     return prompt
