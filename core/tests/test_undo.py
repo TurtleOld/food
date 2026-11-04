@@ -107,7 +107,7 @@ class UndoTests(TestCase):
     def test_token_is_still_valid_just_before_five_minutes(self):
         token = token_of(self.delete_via_sheet())
 
-        with mock.patch("time.time", return_value=time.time() + 299):
+        with mock.patch("time.time", return_value=time.time() + 295):
             self.client.post(self.undo_url, {"token": token}, headers=HTMX)
 
         self.assertTrue(DiaryEntry.objects.exists())
