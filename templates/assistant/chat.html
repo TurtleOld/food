@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load chat_markdown %}
+{% load chat_markdown static %}
 
 {% block title %}Ассистент{% endblock %}
 
@@ -113,7 +113,8 @@
           {% if form.non_field_errors %}
             <div class="chat-error" role="alert">{{ form.non_field_errors }}</div>
           {% endif %}
-          <label class="label" for="{{ form.text.id_for_label }}">{{ form.text.label }}</label>
+
+          <label class="is-sr-only" for="{{ form.text.id_for_label }}">{{ form.text.label }}</label>
           {{ form.text }}
           {% if form.text.errors %}<div class="chat-error" role="alert">{{ form.text.errors }}</div>{% endif %}
           {% if form.photo.errors %}<div class="chat-error" role="alert">{{ form.photo.errors }}</div>{% endif %}
@@ -127,14 +128,14 @@
                      aria-label="Приложить фото с камеры, из галереи или файлом">
                 {% include "components/icons/photo.html" %} Фото
               </label>
-              <span class="chat-file-name is-size-7 muted" x-show="name" x-cloak x-text="name"></span>
-              <button type="button" class="btn-quiet" x-show="name" x-cloak
+              <span class="chat-file-name muted" x-show="name" x-cloak x-text="name"></span>
+              <button type="button" class="btn-quiet chat-photo-remove" x-show="name" x-cloak
                       @click="$refs.photo.value = ''; name = ''" aria-label="Убрать фото">×</button>
             </div>
             <button class="btn-main chat-send" type="submit"
                     {% if active %}disabled aria-disabled="true"{% endif %}>Отправить</button>
           </div>
-          <p class="is-size-7 muted" id="photo-help">
+          <p class="chat-composer-hint" id="photo-help">
             JPEG, PNG или WebP до {{ photo_max_mb }} МБ. Камера, галерея или файл.
             После ответа фото удаляется.
           </p>
@@ -147,6 +148,7 @@
 {% endblock %}
 
 {% block scripts %}
+  <script src="{% static 'js/composer.js' %}"></script>
   <script>
     // Лента чата должна открываться на последнем сообщении, но опрос не должен
     // выдёргивать человека из истории: прокрутка следует вниз, только если он и так внизу.

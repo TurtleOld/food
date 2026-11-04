@@ -210,9 +210,10 @@ class ChatMessageForm(forms.Form):
         label="Сообщение",
         widget=forms.Textarea(
             attrs={
-                "class": "input chat-text",
-                "rows": 2,
-                "placeholder": "Спросите про КБЖУ или добавьте запись…",
+                "class": "input chat-composer-input",
+                "rows": 1,
+                "enterkeyhint": "send",
+                "placeholder": "Спросите про КБЖУ…",
             }
         ),
     )
