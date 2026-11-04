@@ -3,6 +3,7 @@ from typing import Any, cast
 from django import forms
 from django.conf import settings
 
+from assistant.chat import ChatError, ensure_message_fits
 from assistant.models import LLMSettings, Proposal, SummarySettings
 from assistant.photos import PhotoError, prepare_photo
 from core.forms import DayField, day_widget
@@ -239,11 +240,19 @@ class ChatMessageForm(forms.Form):
         photo = cleaned_data.get("photo")
         if not text and not photo:
             self.add_error(None, "Введите сообщение или приложите фото")
+        prepared = None
         if photo:
             try:
-                cleaned_data["photo"] = prepare_photo(photo)
+                prepared = prepare_photo(photo)
             except PhotoError as error:
                 self.add_error("photo", str(error))
+            else:
+                cleaned_data["photo"] = prepared
+        if text or prepared is not None:
+            try:
+                ensure_message_fits(text, has_photo=prepared is not None)
+            except ChatError as error:
+                self.add_error(None, str(error))
         return cleaned_data
 
 

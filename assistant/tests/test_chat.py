@@ -26,7 +26,10 @@ from assistant.chat import (
     execute_turn,
 )
 from assistant.gateway import LLMGatewayError, LLMResult, ToolCall, Usage
-from assistant.models import Conversation, Message, Proposal, Turn
+from assistant.models import Conversation, LLMSettings, Message, Proposal, Turn
+from assistant.prompt_budget import TOOL_RESULT_MAX_TOKENS, estimated_input_tokens, text_tokens
+from assistant.templatetags.chat_markdown import markdown
+from assistant.tools import TOOLS
 from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
 from core.off import OffLookup, Outcome
 from core.profile import target_suggestion
@@ -37,6 +40,23 @@ DUMMY_TASKS = {
     "default": {"BACKEND": "django.tasks.backends.dummy.DummyBackend"},
 }
 COST = Decimal("0.010000")
+
+
+def configure_llm(**overrides):
+    values = {
+        "base_url": "https://llm.test/v1",
+        "model": "deepseek-flash",
+        "api_key": "sk-live-secret-1234",
+        "monthly_budget_rub": Decimal("500.00"),
+        "input_price_rub": Decimal("100.00"),
+        "cached_price_rub": Decimal("20.00"),
+        "output_price_rub": Decimal("300.00"),
+        "max_input_tokens": 12000,
+        "max_output_tokens": 1000,
+        "timeout_seconds": 10,
+    }
+    values.update(overrides)
+    return LLMSettings.objects.create(**values)
 
 
 def answer(text: str = "Готово") -> LLMResult:
@@ -801,6 +821,124 @@ class ExecutionTest(ChatTestCase):
         self.assertEqual(len(script.calls), 1)
 
 
+class PromptBudgetTest(ChatTestCase):
+    """Запрос укладывается в лимит провайдера, а не в фиксированное число символов."""
+
+    def seed_history(self, count: int, *, size: int = 300) -> None:
+        conversation = Conversation.for_member(self.member)
+        for index in range(count):
+            old = Turn.objects.create(
+                conversation=conversation,
+                status=Turn.Status.SUCCEEDED,
+                request_text=f"старое-{index}",
+                request_dedupe_key=f"old-{index}",
+            )
+            Message.objects.create(
+                conversation=conversation,
+                turn=old,
+                role=Message.Role.USER,
+                text=f"старое-{index}-" + "д" * size,
+            )
+            Message.objects.create(
+                conversation=conversation,
+                turn=old,
+                role=Message.Role.ASSISTANT,
+                text=f"ответ-{index}-" + "о" * size,
+            )
+
+    def test_photo_with_long_history_is_trimmed_and_the_turn_succeeds(self):
+        configure_llm()
+        self.seed_history(12)
+
+        self.send("Что на фото?", photo())
+        turn = Turn.objects.latest("pk")
+        script = self.run_with(turn, Script(answer("Вижу молоко.")))
+
+        self.assertEqual(turn.status, Turn.Status.SUCCEEDED, turn.error_message)
+        prompt = script.calls[0]["messages"]
+        self.assertLessEqual(estimated_input_tokens(prompt, TOOLS), 12000)
+        self.assertEqual(prompt[0]["role"], "system")
+        self.assertEqual(prompt[-1]["content"][1]["type"], "image_url")
+        history = json.dumps(prompt, ensure_ascii=False)
+        self.assertIn("старое-11-", history)
+        self.assertNotIn("старое-0-", history)
+
+    def test_photo_with_text_within_the_limit_is_not_rejected(self):
+        configure_llm()
+
+        response = self.send("я" * 500, photo())
+
+        self.assertRedirects(response, reverse("assistant:chat"))
+        self.assertEqual(Turn.objects.count(), 1)
+
+    def test_current_message_that_does_not_fit_is_rejected_before_a_turn_exists(self):
+        configure_llm()
+
+        response = self.send("я" * 3500, photo())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Сообщение с фото не помещается в лимит модели")
+        self.assertContains(response, "отправьте фото отдельным сообщением")
+        self.assertEqual(Turn.objects.count(), 0)
+
+    def test_long_text_without_photo_is_rejected_before_a_turn_exists(self):
+        configure_llm()
+
+        response = self.send("я" * 4000)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Сообщение не помещается в лимит модели")
+        self.assertEqual(Turn.objects.count(), 0)
+
+    def test_photo_that_does_not_fit_is_rejected_before_a_turn_exists(self):
+        configure_llm(max_input_tokens=9000)
+
+        response = self.send("", photo())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Фото не помещается в лимит модели")
+        self.assertEqual(Turn.objects.count(), 0)
+
+    def test_tool_results_are_bounded_across_rounds(self):
+        configure_llm()
+        product = Product.objects.get(name="Молоко 3.2%")
+        DiaryEntry.objects.bulk_create(
+            DiaryEntry(
+                member=self.member,
+                date=datetime.date(2026, 10, 31),
+                meal_type=DiaryEntry.MealType.LUNCH,
+                product=product,
+                amount=Decimal("100"),
+                calories_snapshot=product.calories,
+                proteins_snapshot=product.proteins,
+                fats_snapshot=product.fats,
+                carbs_snapshot=product.carbs,
+            )
+            for _ in range(300)
+        )
+        self.send("Что я ел?")
+        turn = self.only_turn()
+        script = Script(
+            tool_answer("read_diary", {"date": "2026-10-31"}),
+            tool_answer("read_diary", {"date": "2026-10-31"}),
+            answer("Много записей."),
+        )
+
+        self.run_with(turn, script)
+
+        self.assertEqual(turn.status, Turn.Status.SUCCEEDED, turn.error_message)
+        self.assertEqual(len(script.calls), 3)
+        for call in script.calls:
+            self.assertLessEqual(estimated_input_tokens(call["messages"], TOOLS), 12000)
+        results = [item for item in script.calls[-1]["messages"] if item["role"] == "tool"]
+        self.assertEqual(len(results), 2)
+        self.assertLessEqual(text_tokens(results[-1]["content"]), TOOL_RESULT_MAX_TOKENS)
+        self.assertIn("truncated", results[-1]["content"])
+        self.assertLessEqual(
+            text_tokens(results[0]["content"]), text_tokens(results[-1]["content"])
+        )
+
+
 class ToolTurnTest(ChatTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -1142,7 +1280,7 @@ class MarkdownAnswerTest(ChatTestCase):
                     "<ol>",
                     "<table>",
                     "<th>Продукт</th>",
-                    "<td>50</td>",
+                    '<td class="chat-num">50</td>',
                     '<pre><code class="language-python">',
                     "&lt;tag&gt;",
                     "<code>код</code>",
@@ -1179,3 +1317,74 @@ class MarkdownAnswerTest(ChatTestCase):
         ):
             self.assertNotContains(page, tag)
         self.assertContains(page, "&lt;script&gt;")
+
+
+class ChatMarkdownTableTest(ChatTestCase):
+    def test_kbju_table_scrolls_inside_the_answer_and_keeps_numbers_whole(self):
+        self.send("Сводка за день")
+        turn = self.only_turn()
+        self.run_with(
+            turn,
+            Script(
+                answer(
+                    "| Продукт | Количество | Ккал | Б |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| Молоко | 150 г | 29,2 | 3,2 |\n"
+                    "| Итого | 150 г | 62,0 | ≥643 |\n"
+                )
+            ),
+        )
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertContains(page, '<div class="chat-table-scroll">')
+        self.assertContains(page, '<th class="chat-num">Количество</th>')
+        self.assertContains(page, '<td class="chat-num">29,2</td>')
+        self.assertContains(page, '<td class="chat-num">≥643</td>')
+        self.assertContains(page, '<tr class="chat-total">')
+        self.assertContains(page, "<td>Молоко</td>")
+
+    def test_table_markup_stays_safe(self):
+        self.send("Таблица")
+        turn = self.only_turn()
+        table = "| Подпись |\n| --- |\n| <script>alert(1)</script> |\n| [js](javascript:alert(1)) |"
+        self.run_with(turn, Script(answer(table)))
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertNotContains(page, "<script")
+        self.assertNotContains(page, 'href="javascript:')
+        self.assertContains(page, "&lt;script&gt;")
+
+
+class ChatMarkdownFilterTest(TestCase):
+    def test_numeric_columns_and_total_row_are_marked(self):
+        rendered = markdown(
+            "| Продукт | Количество | Ккал |\n"
+            "| --- | --- | --- |\n"
+            "| Молоко | 1,5 л | 62,0 |\n"
+            "| Итого | 1,5 л | 62,0 |"
+        )
+        self.assertTrue(rendered.startswith('<div class="chat-table-scroll"><table>'))
+        self.assertTrue(rendered.endswith("</table>\n</div>\n"))
+        self.assertIn('<th class="chat-num">Количество</th>', rendered)
+        self.assertIn('<th class="chat-num">Ккал</th>', rendered)
+        self.assertIn('<td class="chat-num">1,5 л</td>', rendered)
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+        self.assertIn('<tr class="chat-total">', rendered)
+        self.assertIn("<td>Молоко</td>", rendered)
+
+    def test_text_column_is_not_marked_numeric(self):
+        rendered = markdown("| Продукт | Ккал |\n| --- | --- |\n| Молоко 3,2% | 62,0 |")
+        self.assertNotIn("chat-total", rendered)
+        self.assertIn("<td>Молоко 3,2%</td>", rendered)
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+
+    def test_dash_placeholders_do_not_hide_numeric_columns(self):
+        rendered = markdown("| Ккал |\n| --- |\n| 62,0 |\n| — |")
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+        self.assertIn('<td class="chat-num">—</td>', rendered)
+
+    def test_html_is_still_escaped_and_links_are_validated(self):
+        rendered = markdown(
+            "<img src=x onerror=alert(1)>\n\n| a |\n| --- |\n| [x](javascript:alert(1)) |"
+        )
+        self.assertNotIn("<img", rendered)
+        self.assertIn("&lt;img", rendered)
+        self.assertNotIn('href="javascript:', rendered)
