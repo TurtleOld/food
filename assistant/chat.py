@@ -41,6 +41,7 @@ EMPTY_ANSWER = "Ассистент вернул пустой ответ. Поп�
 TOO_MANY_STEPS = "Ассистент сделал слишком много шагов за один ход. Попробуйте ещё раз."
 INTERRUPTED = "Ход прервался: прошло слишком много времени. Попробуйте ещё раз."
 TURN_FAILED = "Не получилось выполнить ход. Попробуйте ещё раз."
+TURN_CANCELLED = "Ход отменён. Нажмите «Повторить», чтобы отправить заново."
 
 ACTIVE_STATUSES = (Turn.Status.PENDING, Turn.Status.RUNNING)
 
@@ -334,6 +335,29 @@ def execute_turn(turn_id: int) -> None:
     finally:
         logger.info("Turn %s: finished in %.1fs", turn_id, time.monotonic() - started)
         _clear_photos(turn)
+
+
+def cancel_active_turn(conversation: Conversation) -> bool:
+    """Отменяет активный ход человека; возвращает True, если было что отменять.
+
+    Задача могла зависнуть в очереди или умереть вместе с воркером. Повторная
+    доставка задачи отменённому ходу безопасна: claim пропускает неактивные
+    статусы. Резерв бюджета не трогаем — его освободит планировщик по истечении.
+    """
+    with transaction.atomic():
+        turn = (
+            Turn.objects.select_for_update()
+            .filter(conversation=conversation, status__in=ACTIVE_STATUSES)
+            .first()
+        )
+        if turn is None:
+            return False
+        turn.status = Turn.Status.FAILED
+        turn.error_message = TURN_CANCELLED
+        turn.finished_at = timezone.now()
+        turn.save(update_fields=["status", "error_message", "finished_at"])
+    _clear_photos(turn)
+    return True
 
 
 def recover_stale_running_turns(

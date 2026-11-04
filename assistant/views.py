@@ -16,6 +16,7 @@ from django.views.generic import ListView, TemplateView, UpdateView, View
 from assistant.budget import month_summary
 from assistant.chat import (
     ChatError,
+    cancel_active_turn,
     recover_stale_pending_turns,
     recover_stale_running_turns,
     start_turn,
@@ -284,6 +285,18 @@ class ChatSendView(HtmxLoginRequiredMixin, View):
             return _chat_response(request, form)
         if started.created:
             enqueue_on_commit(execute_turn_task, started.turn.pk)
+        if request.htmx:  # type: ignore[attr-defined]
+            return _chat_response(request)
+        return redirect("assistant:chat")
+
+
+class ChatCancelView(HtmxLoginRequiredMixin, View):
+    """Отменяет зависший ход: застрял в очереди или воркер пропал."""
+
+    http_method_names = ["post"]
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        cancel_active_turn(Conversation.for_member(request.user))
         if request.htmx:  # type: ignore[attr-defined]
             return _chat_response(request)
         return redirect("assistant:chat")
