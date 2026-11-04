@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/TurtleOld/food/compare/v0.4.0...v0.4.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **assistant:** исправить повтор ходов и отображение Markdown ([#50](https://github.com/TurtleOld/food/issues/50)) ([e8c7c43](https://github.com/TurtleOld/food/commit/e8c7c43004a3442a35a413db8f3545de35dd52f7))
+
 ## [0.4.0](https://github.com/TurtleOld/food/compare/v0.3.0...v0.4.0) (2026-11-04)
 
 
