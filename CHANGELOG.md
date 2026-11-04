@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/TurtleOld/food/compare/v0.2.0...v0.3.0) (2026-11-04)
+
+
+### Features
+
+* **assistant:** log provider requests and turn progress ([#44](https://github.com/TurtleOld/food/issues/44)) ([658ca46](https://github.com/TurtleOld/food/commit/658ca4697f8bf423f63820b3fac524775bf53ef6))
+
+
+### Bug Fixes
+
+* **assistant:** show settings link in chat for staff ([#43](https://github.com/TurtleOld/food/issues/43)) ([385cadd](https://github.com/TurtleOld/food/commit/385cadd8385af75bcc3e3a75ca029211db096932))
+
 ## [0.2.0](https://github.com/TurtleOld/food/compare/v0.1.0...v0.2.0) (2026-11-04)
 
 
