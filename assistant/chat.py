@@ -129,6 +129,24 @@ def start_turn(
     return TurnStart(turn, True)
 
 
+def retry_turn(member: Any, turn_id: int) -> TurnStart:
+    """Повторяет конкретный неудачный ход, сохраняя исходную попытку для аудита."""
+    with transaction.atomic():
+        failed = (
+            Turn.objects.select_for_update()
+            .filter(pk=turn_id, conversation__member=member, status=Turn.Status.FAILED)
+            .first()
+        )
+        if failed is None or not failed.request_text:
+            raise ChatError("Этот ход нельзя повторить")
+        if failed.replacement_id is not None:
+            return TurnStart(Turn.objects.get(pk=failed.replacement_id), False)
+        started = start_turn(member, text=failed.request_text)
+        failed.replacement = started.turn
+        failed.save(update_fields=["replacement"])
+        return started
+
+
 def _active_turn(conversation: Conversation, key: str) -> Turn | None:
     return Turn.objects.filter(
         conversation=conversation,
@@ -411,7 +429,7 @@ def recover_stale_pending_turns(
 def turn_cards(conversation: Conversation) -> list[TurnCard]:
     """Последние ходы ленты по возрастанию времени, с их сообщениями."""
     turns = list(
-        Turn.objects.filter(conversation=conversation)
+        Turn.objects.filter(conversation=conversation, replacement__isnull=True)
         # Байты фото нужны только воркеру; лента проверяет лишь `has_image`.
         .prefetch_related(Prefetch("messages", queryset=Message.objects.defer("photo")))
         .order_by("-created_at", "-pk")[: settings.ASSISTANT_FEED_TURNS]

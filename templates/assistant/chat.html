@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load chat_markdown %}
 
 {% block title %}Ассистент{% endblock %}
 
@@ -39,7 +40,7 @@
 
               {% if card.answer %}
                 <div class="chat-bubble chat-message-assistant">
-                  <p>{{ card.answer.text|linebreaksbr }}</p>
+                  <div class="content chat-markdown">{{ card.answer.text|markdown }}</div>
                 </div>
               {% elif card.turn.status == "failed" %}
                 <div class="chat-bubble chat-error" role="alert">
@@ -53,6 +54,7 @@
                           hx-post="{% url 'assistant:chat_send' %}" hx-target="#chat" hx-swap="outerHTML"
                           hx-disabled-elt="find button[type='submit']">
                       {% csrf_token %}
+                      <input type="hidden" name="retry_turn_id" value="{{ card.turn.pk }}">
                       <textarea name="text" hidden>{{ card.turn.request_text }}</textarea>
                       <button class="btn-quiet" type="submit">Повторить</button>
                     </form>
@@ -160,6 +162,14 @@
       });
       document.addEventListener("htmx:afterSwap", (event) => {
         const id = event.detail.target?.id;
+        if (id === "feed") {
+          const button = document.querySelector('#chat-composer button[type="submit"]');
+          const busy = document.getElementById("feed")?.getAttribute("aria-busy") === "true";
+          if (button) {
+            button.disabled = busy;
+            button.setAttribute("aria-disabled", String(busy));
+          }
+        }
         if (follow && (id === "feed" || id === "chat")) requestAnimationFrame(scrollToEnd);
       });
       window.addEventListener("load", () => {

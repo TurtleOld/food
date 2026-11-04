@@ -274,6 +274,9 @@ class Turn(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     request_text = models.TextField(blank=True)
     request_dedupe_key = models.CharField(max_length=64)
+    replacement = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.RESTRICT, related_name="retried_turns"
+    )
     recovery_at = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(blank=True)
     cost_rub = models.DecimalField(max_digits=12, decimal_places=6, default=0)

@@ -13,6 +13,7 @@ dependencies = [
     "django-tasks-db>=0.13,<0.14",
     "pywebpush>=2.5.0",
     "pillow>=13.0.0",
+    "markdown-it-py>=4,<5",
 ]
 
 [dependency-groups]
