@@ -13,16 +13,17 @@
     <p class="proposal-meta">Добавит новый Продукт в Каталог, без Записи дневника.</p>
   {% else %}
     <p class="proposal-meta num">
-      <span>{{ proposal.amount|floatformat:1 }}</span>
-      {% if proposal.product %}{{ proposal.product.get_base_unit_display }}{% else %}{{ proposal.get_new_base_unit_display }}{% endif %}
+      <span>{{ proposal.amount|floatformat:1 }} {% if proposal.product %}{{ proposal.product.get_base_unit_display }}{% else %}{{ proposal.get_new_base_unit_display }}{% endif %}</span>
       → {{ proposal.get_meal_type_display }} · {{ proposal.date|date:"d.m.Y" }}
     </p>
   {% endif %}
 
   {% if not proposal.product and proposal.new_name %}
     <p class="proposal-nutrition is-size-7 muted num">
-      На 100 г / мл: {{ proposal.new_calories|floatformat:1 }} ккал ·
-      Б {{ proposal.new_proteins|floatformat:1 }} · Ж {{ proposal.new_fats|floatformat:1 }} · У {{ proposal.new_carbs|floatformat:1 }}
+      На 100 г / мл: <span>{{ proposal.new_calories|floatformat:1 }} ккал</span> ·
+      <span>Б {{ proposal.new_proteins|floatformat:1 }}</span> ·
+      <span>Ж {{ proposal.new_fats|floatformat:1 }}</span> ·
+      <span>У {{ proposal.new_carbs|floatformat:1 }}</span>
     </p>
     {% if proposal.status == "pending" and proposal.similar %}
       <p class="proposal-similar is-size-7">
