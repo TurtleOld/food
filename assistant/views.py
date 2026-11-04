@@ -19,6 +19,7 @@ from assistant.chat import (
     cancel_active_turn,
     recover_stale_pending_turns,
     recover_stale_running_turns,
+    retry_turn,
     start_turn,
     turn_cards,
 )
@@ -275,11 +276,15 @@ class ChatSendView(HtmxLoginRequiredMixin, View):
         if not form.is_valid():
             return _chat_response(request, form)
         try:
-            started = start_turn(
-                request.user,
-                text=form.cleaned_data["text"],
-                photo=form.cleaned_data.get("photo"),
-            )
+            retry_turn_id = form.cleaned_data.get("retry_turn_id")
+            if retry_turn_id is not None:
+                started = retry_turn(request.user, retry_turn_id)
+            else:
+                started = start_turn(
+                    request.user,
+                    text=form.cleaned_data["text"],
+                    photo=form.cleaned_data.get("photo"),
+                )
         except ChatError as error:
             form.add_error(None, str(error))
             return _chat_response(request, form)

@@ -202,6 +202,8 @@ class ChatMessageForm(forms.Form):
     создания хода, а ход получает уже перекодированный JPEG.
     """
 
+    retry_turn_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+
     text = forms.CharField(
         required=False,
         max_length=settings.ASSISTANT_MESSAGE_MAX_CHARS,

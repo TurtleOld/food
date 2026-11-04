@@ -402,10 +402,107 @@ class FailureAndRetryTest(ChatTestCase):
         retry_form = f'<textarea name="text" hidden>{"Привет"}</textarea>'
         self.assertContains(page, retry_form)
 
-        self.send("Привет")
+        self.send("Привет", retry_turn_id=turn.pk)
         self.assertEqual(Turn.objects.count(), 2)
         retry = Turn.objects.latest("pk")
         self.assertEqual(retry.status, Turn.Status.PENDING)
+
+    def test_retry_hides_failed_attempt_and_is_idempotent_after_success(self):
+        self.send("Уникальный вопрос")
+        failed = self.only_turn()
+        self.client.post(reverse("assistant:chat_cancel"))
+        failed.cost_rub = COST
+        failed.save(update_fields=["cost_rub"])
+
+        response = self.send("Подменённый текст", retry_turn_id=failed.pk)
+        self.assertRedirects(response, reverse("assistant:chat"))
+        retry = Turn.objects.latest("pk")
+        self.assertEqual(retry.request_text, "Уникальный вопрос")
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertContains(page, "Уникальный вопрос", count=1)
+        self.assertNotContains(page, TURN_CANCELLED)
+        self.assertContains(page, 'hx-trigger="every 2s"')
+        self.run_with(retry, Script(answer("Ответ")))
+        self.send("Уникальный вопрос", retry_turn_id=failed.pk)
+        self.assertEqual(Turn.objects.count(), 2)
+        failed.refresh_from_db()
+        self.assertEqual(failed.cost_rub, COST)
+        self.assertEqual(failed.messages.count(), 1)
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertContains(page, "Ответ")
+        self.assertNotContains(page, 'hx-trigger="every 2s"')
+
+    def test_retry_rejects_foreign_successful_active_and_invalid_turns(self):
+        self.send("Сохрани мой ход")
+        turn = self.only_turn()
+        for turn_id in (turn.pk, "invalid", 0, 999999):
+            with self.subTest(turn_id=turn_id):
+                page = self.send("Сохрани мой ход", retry_turn_id=turn_id)
+                self.assertEqual(page.status_code, 200)
+                self.assertEqual(Turn.objects.count(), 1)
+        self.run_with(turn, Script(answer("Успешный ответ")))
+        self.send("Сохрани мой ход", retry_turn_id=turn.pk)
+        self.assertEqual(Turn.objects.count(), 1)
+        turn.status = Turn.Status.FAILED
+        turn.save(update_fields=["status"])
+        self.client.force_login(self.other)
+        page = self.send("Чужой ход", retry_turn_id=turn.pk)
+        self.assertContains(page, "Этот ход нельзя повторить")
+        self.assertNotContains(page, "Успешный ответ")
+        turn.refresh_from_db()
+        self.assertIsNone(turn.replacement_id)
+        self.assertEqual(Turn.objects.count(), 1)
+
+    def test_retry_provider_failure_hides_only_the_selected_attempt(self):
+        self.send("Первый вопрос")
+        first = self.only_turn()
+        with self.assertLogs("assistant.chat", level="WARNING"):
+            self.run_with(first, Script(LLMGatewayError("down")))
+        self.send("Второй вопрос")
+        second = Turn.objects.latest("pk")
+        self.run_with(second, Script(answer("Ответ второго")))
+        self.send("Третий вопрос")
+        third = Turn.objects.latest("pk")
+        self.client.post(reverse("assistant:chat_cancel"))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            page = self.client.post(
+                reverse("assistant:chat_send"),
+                {"text": first.request_text, "retry_turn_id": first.pk},
+                headers={"HX-Request": "true"},
+            )
+        self.assertEqual(len(callbacks), 1)
+        self.assertContains(page, "Первый вопрос", count=1)
+        self.assertContains(page, "Ответ второго")
+        self.assertContains(page, TURN_CANCELLED)
+        self.assertNotContains(page, PROVIDER_FAILED)
+        self.assertContains(page, 'id="chat"')
+        self.assertContains(page, 'hx-target="#feed"')
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+        self.assertIsNotNone(first.replacement_id)
+        self.assertEqual(second.status, Turn.Status.SUCCEEDED)
+        self.assertIsNone(third.replacement_id)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.send("Первый вопрос", retry_turn_id=first.pk)
+        self.assertEqual(callbacks, [])
+        self.assertEqual(Turn.objects.count(), 4)
+
+    def test_only_selected_failure_is_hidden_even_when_questions_match(self):
+        self.send("Одинаковый вопрос")
+        first = self.only_turn()
+        self.client.post(reverse("assistant:chat_cancel"))
+        self.send("Одинаковый вопрос")
+        second = Turn.objects.latest("pk")
+        self.client.post(reverse("assistant:chat_cancel"))
+
+        self.send("Одинаковый вопрос", retry_turn_id=first.pk)
+
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertContains(page, 'class="chat-turn"', count=2)
+        self.assertContains(page, TURN_CANCELLED, count=1)
+        second.refresh_from_db()
+        self.assertIsNone(second.replacement_id)
 
     def test_empty_answer_is_a_failure_not_an_empty_bubble(self):
         self.send("Привет")
@@ -438,6 +535,10 @@ class FailureAndRetryTest(ChatTestCase):
 
         self.assertContains(page, "Фото удалено")
         self.assertNotContains(page, "Повторить")
+        self.send("Произвольный текст", retry_turn_id=turn.pk)
+        self.assertEqual(Turn.objects.count(), 1)
+        turn.refresh_from_db()
+        self.assertIsNone(turn.replacement_id)
 
 
 class ChatCancelTest(ChatTestCase):
@@ -965,3 +1066,69 @@ class ToolTurnTest(ChatTestCase):
 
         _, missing, _ = self.run_tool("propose_product", {})
         self.assertIn("Неверные аргументы", missing["error"])
+
+
+class MarkdownAnswerTest(ChatTestCase):
+    def test_assistant_markdown_is_rendered_in_full_page_and_poll_response(self):
+        self.send("**Текст человека** <script>alert(1)</script>")
+        turn = self.only_turn()
+        self.run_with(
+            turn,
+            Script(
+                answer(
+                    "## Заголовок\n\n**Жирный** и *курсив*\n\n"
+                    "- Первый\n- Второй\n\n1. Один\n2. Два\n\n"
+                    "| Продукт | Ккал |\n| --- | --- |\n| Молоко | 50 |\n\n"
+                    "```python\nprint('<tag>')\n```\n\n"
+                    "`код` и [ссылка](https://example.com)"
+                )
+            ),
+        )
+        for headers in ({}, {"HX-Request": "true"}):
+            with self.subTest(headers=headers):
+                page = self.client.get(reverse("assistant:chat"), headers=headers)
+                for fragment in (
+                    "<h2>Заголовок</h2>",
+                    "<strong>Жирный</strong>",
+                    "<em>курсив</em>",
+                    "<ul>",
+                    "<ol>",
+                    "<table>",
+                    "<th>Продукт</th>",
+                    "<td>50</td>",
+                    '<pre><code class="language-python">',
+                    "&lt;tag&gt;",
+                    "<code>код</code>",
+                    'href="https://example.com"',
+                    "**Текст человека**",
+                ):
+                    self.assertContains(page, fragment)
+                self.assertNotContains(page, "<script>alert(1)</script>")
+                self.assertNotContains(page, 'hx-trigger="every 2s"')
+
+    def test_html_and_dangerous_markdown_urls_cannot_execute(self):
+        self.send("Безопасность")
+        turn = self.only_turn()
+        payload = (
+            '<script>alert(1)</script>\n<img src=x onerror="alert(1)">\n'
+            '<a hx-get="/private" onclick="alert(1)">html</a>\n\n'
+            "[js](javascript:alert%281%29) [entity](jav&#x61;script:alert%281%29) "
+            "[case](JaVaScRiPt:alert%281%29) [vb](vbscript:msgbox%281%29) "
+            "[file](file:///etc/passwd) [data](data:text/html;base64,PHNjcmlwdD4=) "
+            "![image](data:image/png;base64,AAAA) [custom](custom:run)"
+        )
+        self.run_with(turn, Script(answer(payload)))
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        for tag in (
+            "<script",
+            "<img",
+            "<a hx-get=",
+            'href="javascript:',
+            'href="vbscript:',
+            'href="file:',
+            'href="data:',
+            'src="data:',
+            'href="custom:',
+        ):
+            self.assertNotContains(page, tag)
+        self.assertContains(page, "&lt;script&gt;")
