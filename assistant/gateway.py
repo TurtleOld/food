@@ -17,11 +17,7 @@ from urllib.request import Request, urlopen
 
 from assistant.budget import BudgetUnavailable, release, reserve, settle
 from assistant.models import LLMSettings
-
-# Без токенизатора: один токен на UTF-8 байт — верхняя граница для BPE, безопасная
-# для кириллицы. Изображение оценивается фиксированным бюджетом на высокое разрешение.
-IMAGE_TOKENS = 4096
-MESSAGE_OVERHEAD_TOKENS = 16
+from assistant.prompt_budget import estimated_input_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -51,49 +47,6 @@ class LLMResult:
     usage: Usage
     cost_rub: Decimal
     model: str
-
-
-def _text_tokens(text: str) -> int:
-    return len(text.encode("utf-8"))
-
-
-def _content_tokens(content: Any) -> int:
-    if isinstance(content, str):
-        return _text_tokens(content)
-    if not isinstance(content, list):
-        return 0
-    tokens = 0
-    for part in content:
-        if not isinstance(part, dict):
-            continue
-        if part.get("type") == "image_url":
-            tokens += IMAGE_TOKENS
-        elif isinstance(part.get("text"), str):
-            tokens += _text_tokens(part["text"])
-    return tokens
-
-
-def _message_tokens(message: Mapping[str, Any]) -> int:
-    tokens = _content_tokens(message.get("content")) + MESSAGE_OVERHEAD_TOKENS
-    tool_calls = message.get("tool_calls")
-    if isinstance(tool_calls, list):
-        for call in tool_calls:
-            function = call.get("function") if isinstance(call, dict) else None
-            if isinstance(function, dict):
-                tokens += _text_tokens(str(function.get("name") or ""))
-                tokens += _text_tokens(str(function.get("arguments") or ""))
-    return tokens
-
-
-def _estimated_input_tokens(
-    messages: Sequence[Mapping[str, Any]],
-    tools: Sequence[Mapping[str, Any]] | None = None,
-) -> int:
-    """Консервативная оценка всего входа: сообщения, tool_calls, схемы tools и фото."""
-    tokens = sum(_message_tokens(message) for message in messages)
-    if tools:
-        tokens += _text_tokens(json.dumps(tools, ensure_ascii=False))
-    return tokens
 
 
 def _payload(
@@ -208,7 +161,7 @@ def complete(
         raise BudgetUnavailable(
             "Ассистент не настроен: администратор должен указать провайдера, тарифы и бюджет."
         )
-    if _estimated_input_tokens(messages, tools) > settings.max_input_tokens:
+    if estimated_input_tokens(messages, tools) > settings.max_input_tokens:
         raise BudgetUnavailable(
             "Запрос слишком большой для настроенного лимита. Сократите текст или фото."
         )
