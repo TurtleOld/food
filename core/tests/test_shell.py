@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
 from django.test import TestCase
@@ -20,6 +22,37 @@ class ShellTest(TestCase):
         self.assertContains(response, reverse("core:product_list"))
         self.assertContains(response, reverse("core:daily_target_edit"))
         self.assertContains(response, "alice")
+
+    def test_profile_chip_carries_member_name_to_profile(self):
+        self.client.force_login(self.member)
+
+        html = self.client.get(reverse("core:day")).content.decode()
+
+        profile_links = re.findall(
+            rf'<a[^>]*href="{re.escape(reverse("core:profile"))}"[^>]*>.*?</a>',
+            html,
+            re.S,
+        )
+        carried = [link for link in profile_links if "alice" in link]
+        self.assertEqual(len(carried), 1)
+        self.assertIn('aria-label="Профиль: alice"', carried[0])
+        self.assertIn("<svg", carried[0])
+
+    def test_logout_is_a_post_form_with_csrf(self):
+        self.client.force_login(self.member)
+
+        html = self.client.get(reverse("core:day")).content.decode()
+
+        form = re.search(
+            rf'<form[^>]*action="{re.escape(reverse("core:logout"))}"[^>]*>.*?</form>',
+            html,
+            re.S,
+        )
+        self.assertIsNotNone(form)
+        assert form is not None
+        self.assertIn('method="post"', form.group(0))
+        self.assertIn("csrfmiddlewaretoken", form.group(0))
+        self.assertNotRegex(html, rf'<a[^>]*href="{re.escape(reverse("core:logout"))}"')
 
     def test_active_nav_item_is_marked_current(self):
         self.client.force_login(self.member)
