@@ -267,6 +267,17 @@ class ChatScreenTest(ChatTestCase):
         self.assertContains(page, "Камера, галерея или файл")
         self.assertContains(page, "до 5 МБ")
 
+    def test_feed_is_a_labelled_scroll_region_that_survives_polling(self):
+        self.send("Привет")
+
+        page = self.client.get(reverse("assistant:chat"))
+        poll = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+
+        self.assertContains(page, 'tabindex="0"')
+        self.assertContains(page, 'aria-label="Лента чата"')
+        self.assertContains(poll, 'tabindex="0"')
+        self.assertContains(poll, 'aria-label="Лента чата"')
+
     def test_one_feed_poller_and_an_announced_waiting_state(self):
         self.send("Привет")
 
