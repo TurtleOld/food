@@ -884,10 +884,36 @@ body:has(.login) {
   overflow-x: auto;
 }
 
-.chat-markdown table {
-  display: block;
+/* Wide КБЖУ tables scroll inside the answer instead of stretching the feed. */
+.chat-table-scroll {
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.chat-markdown table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.chat-markdown table th {
+  white-space: nowrap;
+}
+
+/* Numeric columns stay on one line and line up by the right edge. */
+.chat-markdown .chat-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The total row reads as a result rather than one more data row. */
+.chat-markdown tr.chat-total td {
+  border-top: 2px solid var(--bulma-border);
+  background: var(--bulma-scheme-main-bis);
+  font-weight: 600;
 }
 
 .chat-markdown pre {
@@ -1141,6 +1167,16 @@ body:has(.login) {
 .proposal-nutrition,
 .proposal-similar {
   margin-bottom: 0.25rem;
+}
+
+/* КБЖУ wraps between values, never inside a number. */
+.proposal-nutrition {
+  overflow-wrap: normal;
+}
+
+.proposal-nutrition span,
+.proposal-meta span {
+  white-space: nowrap;
 }
 
 .proposal-actions {
