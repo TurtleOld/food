@@ -44,7 +44,7 @@ services:
       traefik.http.services.food.loadbalancer.server.port: "8000"
       # Shared middleware chain on the Traefik host; set TRAEFIK_MIDDLEWARES
       # to empty to drop it.
-      traefik.http.routers.food.middlewares: "${TRAEFIK_MIDDLEWARES:-chain-public@file}"
+      traefik.http.routers.food.middlewares: "${TRAEFIK_MIDDLEWARES-chain-public@file}"
 
   # One durable queue in the same Postgres; no Redis or broker. Tasks whose
   # worker is killed mid-run are returned to the queue by the scheduler's tick.
