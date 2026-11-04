@@ -835,10 +835,33 @@ body:has(.login) {
 }
 
 /* Chat: one personal feed. The composer lives outside the polled fragment so
-   htmx never replaces text a person is typing. */
+   htmx never replaces text a person is typing. The page is one viewport tall
+   so only the feed scrolls: --chat-chrome covers the top bar and the page and
+   body paddings, and the phone value also clears the fixed tab bar. */
 .chat-page {
+  --chat-chrome: calc(6rem + 48px);
+  display: flex;
+  flex-direction: column;
   max-width: 48rem;
   margin: 0 auto;
+  /* `dvh` follows the dynamic address bar on phones instead of clipping the
+     composer below it; `vh` is the fallback for older browsers. */
+  height: calc(100vh - var(--chat-chrome));
+  height: calc(100dvh - var(--chat-chrome));
+}
+
+/* Phones keep the fixed tab bar at the bottom, so the feed ends above it. */
+@media (max-width: 1023px) {
+  .chat-page {
+    --chat-chrome: calc(6rem + 110px);
+  }
+}
+
+.chat-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .chat-feed,
@@ -847,6 +870,25 @@ body:has(.login) {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* The feed is the only scrolling region: `min-height: 0` lets it shrink
+   inside the column instead of pushing the composer past the viewport. */
+.chat-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Grows with its content instead of being squeezed by the scrolling feed. */
+.chat-feed > * {
+  flex: 0 0 auto;
+}
+
+.chat-feed:focus-visible {
+  outline: 2px solid var(--bulma-primary);
+  outline-offset: 2px;
 }
 
 .chat-turn {
@@ -922,6 +964,9 @@ body:has(.login) {
   align-items: center;
   gap: 0.6rem;
   color: var(--bulma-text-weak);
+  /* On a 390 px phone the row is wider than the bubble: drop the cancel
+     button to its own line instead of breaking "Отменить" mid-word. */
+  flex-wrap: wrap;
 }
 
 .chat-dots {
