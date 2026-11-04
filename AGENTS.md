@@ -32,7 +32,7 @@
 
 ### Issue tracker
 
-Issues and specs live as markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `TurtleOld/food`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
