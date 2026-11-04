@@ -20,6 +20,7 @@ from django.views.generic import ListView, TemplateView, UpdateView, View
 from assistant.budget import month_summary
 from assistant.chat import (
     ChatError,
+    TurnCard,
     cancel_active_turn,
     recover_stale_pending_turns,
     recover_stale_running_turns,
@@ -186,7 +187,10 @@ class ProposalUpdateView(LoginRequiredMixin, UpdateView):
             messages.success(self.request, "Предложение поправлено")
         if self.request.htmx:  # type: ignore[attr-defined]
             return sheet_saved_response(
-                self.request, "assistant/chat.html#feed", _chat_context(self.request.user), "#feed"
+                self.request,
+                "assistant/chat.html#feed",
+                _chat_context(self.request.user, window=_window_start(self.request)),
+                "#feed",
             )
         return redirect("assistant:proposals")
 
@@ -210,7 +214,11 @@ class ProposalDecisionView(LoginRequiredMixin, View):
             messages.success(request, self.success_message)
         if request.htmx:  # type: ignore[attr-defined]
             # Решение из карточки в чате обновляет ленту на месте, без ухода со страницы.
-            response = render(request, "assistant/chat.html#feed", _chat_context(request.user))
+            response = render(
+                request,
+                "assistant/chat.html#feed",
+                _chat_context(request.user, window=_window_start(request)),
+            )
             return with_toasts(response, request)
         return redirect("assistant:proposals")
 
@@ -238,32 +246,53 @@ def _chat_context(
     *,
     window: tuple[datetime.datetime, int] | None = None,
     load_older: bool = False,
+    tail_only: bool = False,
     form: ChatMessageForm | None = None,
 ) -> dict[str, Any]:
     """Лента человека и форма отправки; потерянные задачи ходов возвращаются в очередь.
 
-    Адреса опроса и подгрузки несут курсор показанного окна: иначе ответ опроса
-    или порция ранних ходов откатили бы ленту к первой порции.
+    `history` — подгруженные ранние ходы, `tail` — последняя порция, которую
+    заменяет опрос. Опрос несёт курсор своей порции, поэтому его ответ не растёт
+    вместе с подгруженной историей и не сбрасывает её. Скрытые поля окна
+    возвращают ту же историю после POST отправки, повтора или решения по
+    Предложению.
+
+    Args:
+        member: Член семьи, чью ленту показываем.
+        window: Начало показанного окна; без него — первая порция.
+        load_older: Продолжить окно вверх порцией более ранних ходов.
+        tail_only: Собрать только опрашиваемую порцию без ранней истории.
+        form: Форма с ошибками отправки, если POST не прошёл.
     """
     conversation = Conversation.for_member(member)
     recover_stale_running_turns(conversation)
     for turn_id in recover_stale_pending_turns(conversation):
         enqueue_on_commit(execute_turn_task, turn_id)
     page = turn_page(conversation, since=window, load_older=load_older)
-    poll_url = older_url = ""
-    if page.oldest is not None:
-        cursor = {
-            "since": page.oldest.created_at.isoformat(),
-            "since_pk": page.oldest.pk,
-        }
+    page_size = settings.ASSISTANT_FEED_TURNS
+    if tail_only:
+        history: list[TurnCard] = []
+        tail = page.cards
+    else:
+        history = page.cards[:-page_size]
+        tail = page.cards[-page_size:]
+    oldest = page.oldest
+    tail_start = tail[0].turn if tail else None
+    older_url = poll_url = ""
+    if oldest is not None and page.has_earlier:
+        cursor = {"since": oldest.created_at.isoformat(), "since_pk": oldest.pk}
+        older_url = f"{reverse('assistant:chat')}?{urlencode({**cursor, 'older': 1})}"
+    if tail_start is not None:
+        cursor = {"since": tail_start.created_at.isoformat(), "since_pk": tail_start.pk}
         poll_url = f"{reverse('assistant:chat')}?{urlencode(cursor)}"
-        if page.has_earlier:
-            older_url = f"{poll_url}&older=1"
     return {
-        "cards": page.cards,
-        "active": any(card.turn.is_active for card in page.cards),
+        "history": history,
+        "tail": tail,
+        "active": any(card.turn.is_active for card in tail),
         "poll_url": poll_url,
         "older_url": older_url,
+        "window_since": oldest.created_at.isoformat() if oldest is not None else "",
+        "window_pk": oldest.pk if oldest is not None else "",
         "pending_proposals": Proposal.objects.filter(
             member_id=member.pk, status=Proposal.Status.PENDING
         ).select_related("product"),
@@ -274,8 +303,15 @@ def _chat_context(
 
 
 def _window_start(request: HttpRequest) -> tuple[datetime.datetime, int] | None:
-    """Начало показанного окна из `since`/`since_pk`; испорченный адрес окно не ломает."""
-    raw, raw_pk = request.GET.get("since"), request.GET.get("since_pk")
+    """Курсор показанного окна; испорченное значение окно не ломает.
+
+    GET несёт `since` в адресе подгрузки и опроса, POST — скрытые поля
+    `window_since`/`window_pk`, которые htmx включает из ленты.
+    """
+    if request.method == "POST":
+        raw, raw_pk = request.POST.get("window_since"), request.POST.get("window_pk")
+    else:
+        raw, raw_pk = request.GET.get("since"), request.GET.get("since_pk")
     if not raw or not raw_pk:
         return None
     moment = parse_datetime(raw)
@@ -288,11 +324,21 @@ def _window_start(request: HttpRequest) -> tuple[datetime.datetime, int] | None:
     return moment, pk
 
 
+def _tail_request(request: HttpRequest) -> bool:
+    """Опрос htmx целится в порцию ленты, а не во всю ленту."""
+    return bool(request.htmx and request.htmx.target == "feed-tail")  # type: ignore[attr-defined]
+
+
 class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
-    """Личная лента Ассистента; htmx опрашивает фрагмент `feed`, пока ход не готов."""
+    """Личная лента Ассистента; htmx опрашивает порцию `feed-tail`, пока ход не готов."""
 
     template_name = "assistant/chat.html"
     fragment_template_name = "assistant/chat.html#feed"
+
+    def get_template_names(self) -> list[str]:
+        if _tail_request(self.request):
+            return ["assistant/chat.html#tail"]
+        return super().get_template_names()
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -301,6 +347,7 @@ class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
                 self.request.user,
                 window=_window_start(self.request),
                 load_older=self.request.GET.get("older") == "1",
+                tail_only=_tail_request(self.request),
             )
         )
         return context
@@ -309,7 +356,9 @@ class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
 def _chat_response(request: HttpRequest, form: ChatMessageForm | None = None) -> HttpResponse:
     """Полная страница ленты или её фрагмент `chat` с лентой и формой для htmx."""
     template = "assistant/chat.html#chat" if request.htmx else "assistant/chat.html"  # type: ignore[attr-defined]
-    return render(request, template, _chat_context(request.user, form=form))
+    return render(
+        request, template, _chat_context(request.user, window=_window_start(request), form=form)
+    )
 
 
 class ChatSendView(HtmxLoginRequiredMixin, View):

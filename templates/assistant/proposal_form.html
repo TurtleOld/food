@@ -17,6 +17,7 @@
       <form method="post" action="{{ request.path }}" class="proposal-form{% if not request.htmx %} box{% endif %}"
             {% if proposal.kind == "entry" %}x-data="{ existing: '{{ form.product.value|default:'' }}' }"{% endif %}
             {% if request.htmx %}hx-post="{{ request.path }}" hx-target="#sheet-body" hx-swap="innerHTML"
+            hx-include="#feed-window"
             hx-disabled-elt="find button[type='submit']"{% endif %}>
         {% csrf_token %}
         {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}

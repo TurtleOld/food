@@ -269,7 +269,7 @@ class ChatScreenTest(ChatTestCase):
         page = self.client.get(reverse("assistant:chat"))
 
         self.assertContains(page, 'hx-trigger="every 2s"', count=1)
-        self.assertContains(page, 'hx-target="#feed"')
+        self.assertContains(page, 'hx-target="#feed-tail"')
         self.assertContains(page, 'aria-busy="true"')
         self.assertContains(page, 'role="status"')
         self.assertContains(page, "Ассистент думает")
@@ -528,7 +528,7 @@ class FailureAndRetryTest(ChatTestCase):
         self.assertContains(page, TURN_CANCELLED)
         self.assertNotContains(page, PROVIDER_FAILED)
         self.assertContains(page, 'id="chat"')
-        self.assertContains(page, 'hx-target="#feed"')
+        self.assertContains(page, 'hx-target="#feed-tail"')
         first.refresh_from_db()
         second.refresh_from_db()
         third.refresh_from_db()
@@ -1187,7 +1187,7 @@ class MarkdownAnswerTest(ChatTestCase):
 
 
 class FeedHistoryTest(ChatTestCase):
-    """История ленты: первая порция, подгрузка ранних ходов и сохранение окна при опросе."""
+    """История ленты: порции, ранние ходы, опрос порции и POST с окном истории."""
 
     TEXTS = ("Альфа", "Бета", "Гамма", "Дельта", "Эпсилон")
 
@@ -1203,11 +1203,36 @@ class FeedHistoryTest(ChatTestCase):
         assert url is not None, f"нет hx-get у элемента с {marker}"
         return html.unescape(url.group(1))
 
+    def oldest_turn(self) -> Turn:
+        oldest = Turn.objects.order_by("created_at", "pk").first()
+        assert oldest is not None
+        return oldest
+
+    def window_fields(self, oldest: Turn) -> dict[str, str]:
+        """Скрытые поля окна, которые htmx включает в POST из ленты."""
+        return {"window_since": oldest.created_at.isoformat(), "window_pk": str(oldest.pk)}
+
     def window_url(self, oldest: Turn, *, older: bool = False) -> str:
+        """Адрес окна для GET: `since` в query и, по желанию, порция ранних."""
         params = {"since": oldest.created_at.isoformat(), "since_pk": oldest.pk}
         if older:
-            params["older"] = "1"
+            params["older"] = 1
         return f"{reverse('assistant:chat')}?{urlencode(params)}"
+
+    def load_all_history(self, page_size: int = 2):
+        page = self.client.get(reverse("assistant:chat"))
+        while "data-load-earlier" in page.content.decode():
+            page = self.client.get(
+                self.hx_get_url(page, "data-load-earlier"), headers={"HX-Request": "true"}
+            )
+            assert page.status_code == 200
+        return page
+
+    def poll(self, response):
+        """Ответ на опрос порции: htmx целится в `#feed-tail`."""
+        url = self.hx_get_url(response, 'hx-trigger="every 2s"')
+        response = self.client.get(url, headers={"HX-Request": "true", "HX-Target": "feed-tail"})
+        return url, response
 
     @override_settings(ASSISTANT_FEED_TURNS=2)
     def test_first_page_shows_only_the_newest_turns_and_offers_earlier(self):
@@ -1219,6 +1244,8 @@ class FeedHistoryTest(ChatTestCase):
         self.assertContains(response, "Дельта")
         self.assertNotContains(response, "Гамма")
         self.assertContains(response, "Загрузить более ранние")
+        self.assertContains(response, 'id="feed-tail"')
+        self.assertContains(response, 'id="feed-window"')
 
     @override_settings(ASSISTANT_FEED_TURNS=2)
     def test_earlier_page_continues_the_window_without_duplicates(self):
@@ -1234,6 +1261,8 @@ class FeedHistoryTest(ChatTestCase):
             self.assertContains(second, text, count=1)
         self.assertNotContains(second, "Альфа")
         self.assertContains(second, "Загрузить более ранние")
+        beta = Turn.objects.get(messages__text="Бета")
+        self.assertContains(second, f'value="{beta.created_at.isoformat()}"')
 
         third = self.client.get(
             self.hx_get_url(second, "data-load-earlier"), headers={"HX-Request": "true"}
@@ -1244,11 +1273,134 @@ class FeedHistoryTest(ChatTestCase):
         self.assertNotContains(third, "Загрузить более ранние")
 
     @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_polling_keeps_the_loaded_window_and_its_response_is_bounded(self):
+        self.history()
+        page = self.load_all_history()
+        for text in self.TEXTS:
+            self.assertContains(page, text, count=1)
+
+        poll_url, polled = self.poll(page)
+
+        self.assertContains(polled, 'id="feed-tail"')
+        self.assertContains(polled, 'hx-target="#feed-tail"')
+        self.assertNotContains(polled, 'id="feed-window"')
+        self.assertContains(polled, "Дельта")
+        self.assertContains(polled, "Эпсилон")
+        for text in ("Альфа", "Бета", "Гамма"):
+            self.assertNotContains(polled, text)
+        self.assertEqual(self.hx_get_url(polled, 'hx-trigger="every 2s"'), poll_url)
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_send_keeps_the_loaded_window_from_hidden_fields(self):
+        self.history()
+        self.load_all_history()
+        oldest = self.oldest_turn()
+
+        response = self.client.post(
+            reverse("assistant:chat_send"),
+            {"text": "Новый вопрос", **self.window_fields(oldest)},
+            headers={"HX-Request": "true"},
+        )
+
+        for text in (*self.TEXTS, "Новый вопрос"):
+            self.assertContains(response, text, count=1)
+        self.assertContains(response, f'value="{oldest.created_at.isoformat()}"')
+        _, polled = self.poll(response)
+        self.assertContains(polled, "Новый вопрос")
+        self.assertNotContains(polled, "Альфа")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_proposal_decision_keeps_the_loaded_window(self):
+        self.history()
+        self.load_all_history()
+        oldest = self.oldest_turn()
+        proposal = Proposal.objects.create(
+            member=self.member,
+            kind=Proposal.Kind.PRODUCT,
+            new_name="Тестовый продукт",
+            new_base_unit="g",
+            new_calories=Decimal("100"),
+            new_proteins=Decimal("1"),
+            new_fats=Decimal("1"),
+            new_carbs=Decimal("1"),
+        )
+
+        response = self.client.post(
+            reverse("assistant:proposal_confirm", args=[proposal.pk]),
+            self.window_fields(oldest),
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for text in self.TEXTS:
+            self.assertContains(response, text, count=1)
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_proposal_edit_keeps_the_loaded_window(self):
+        self.history()
+        self.load_all_history()
+        oldest = self.oldest_turn()
+        product = Product.objects.get(name="Молоко 3.2%")
+        proposal = Proposal.objects.create(
+            member=self.member,
+            date=datetime.date(2026, 10, 31),
+            meal_type=DiaryEntry.MealType.LUNCH,
+            amount=Decimal("100"),
+            product=product,
+        )
+
+        response = self.client.post(
+            reverse("assistant:proposal_edit", args=[proposal.pk]),
+            {
+                "product": str(product.pk),
+                "amount": "120",
+                "date": "01/11/2026",
+                "meal_type": "lunch",
+                **self.window_fields(oldest),
+            },
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response["HX-Retarget"], "#feed")
+        for text in self.TEXTS:
+            self.assertContains(response, text, count=1)
+
+    @override_settings(ASSISTANT_FEED_TURNS=300)
+    def test_history_is_not_cut_off_by_a_window_limit(self):
+        conversation = Conversation.for_member(self.member)
+        turns = Turn.objects.bulk_create(
+            Turn(
+                conversation=conversation,
+                request_dedupe_key=f"bulk-{index}",
+                status=Turn.Status.SUCCEEDED,
+            )
+            for index in range(601)
+        )
+        Message.objects.bulk_create(
+            Message(
+                conversation=conversation,
+                turn=turn,
+                role=Message.Role.USER,
+                text=f"Ранний ход {index:03d}",
+            )
+            for index, turn in enumerate(turns)
+        )
+
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(page, "Ранний ход 000")
+        for _ in range(2):
+            page = self.client.get(
+                self.hx_get_url(page, "data-load-earlier"), headers={"HX-Request": "true"}
+            )
+
+        self.assertContains(page, "Ранний ход 000")
+        self.assertNotContains(page, "Загрузить более ранние")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
     def test_last_page_does_not_offer_or_repeat_earlier_turns(self):
         self.history()
 
-        oldest = Turn.objects.order_by("created_at", "pk").first()
-        assert oldest is not None
+        oldest = self.oldest_turn()
         response = self.client.get(
             self.window_url(oldest, older=True), headers={"HX-Request": "true"}
         )
@@ -1256,35 +1408,6 @@ class FeedHistoryTest(ChatTestCase):
         for text in self.TEXTS:
             self.assertContains(response, text, count=1)
         self.assertNotContains(response, "Загрузить более ранние")
-        self.assertEqual(response.status_code, 200)
-
-    @override_settings(ASSISTANT_FEED_TURNS=2)
-    def test_polling_keeps_the_loaded_window(self):
-        self.history()
-        first = self.client.get(reverse("assistant:chat"))
-        second = self.client.get(
-            self.hx_get_url(first, "data-load-earlier"), headers={"HX-Request": "true"}
-        )
-        loaded = self.client.get(
-            self.hx_get_url(second, "data-load-earlier"), headers={"HX-Request": "true"}
-        )
-
-        poll_url = self.hx_get_url(loaded, 'hx-trigger="every 2s"')
-        polled = self.client.get(poll_url, headers={"HX-Request": "true"})
-
-        self.assertIn("since=", poll_url)
-        for text in self.TEXTS:
-            self.assertContains(polled, text, count=1)
-        self.assertNotContains(polled, "Загрузить более ранние")
-
-    @override_settings(ASSISTANT_FEED_TURNS=2)
-    def test_restarted_poll_without_a_window_shows_only_the_first_page(self):
-        self.history()
-
-        polled = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
-
-        self.assertContains(polled, "Эпсилон")
-        self.assertNotContains(polled, "Альфа")
 
     @override_settings(ASSISTANT_FEED_TURNS=2)
     def test_broken_window_address_falls_back_to_the_first_page(self):
