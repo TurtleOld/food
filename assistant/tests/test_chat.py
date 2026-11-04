@@ -2,16 +2,21 @@
 
 import copy
 import datetime
+import html
 import json
+import re
 from decimal import Decimal
 from io import BytesIO
 from unittest import mock
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.tasks import task_backends
 from django.tasks.backends.dummy import DummyBackend
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
@@ -1179,3 +1184,165 @@ class MarkdownAnswerTest(ChatTestCase):
         ):
             self.assertNotContains(page, tag)
         self.assertContains(page, "&lt;script&gt;")
+
+
+class FeedHistoryTest(ChatTestCase):
+    """История ленты: первая порция, подгрузка ранних ходов и сохранение окна при опросе."""
+
+    TEXTS = ("Альфа", "Бета", "Гамма", "Дельта", "Эпсилон")
+
+    def history(self) -> None:
+        for text in self.TEXTS:
+            self.send(text)
+
+    def hx_get_url(self, response, marker: str) -> str:
+        """Адрес htmx-запроса из ответа: контракт между шаблоном и браузером."""
+        tag = re.search(rf"<[^>]*{re.escape(marker)}[^>]*>", response.content.decode())
+        assert tag is not None, f"нет элемента с {marker}"
+        url = re.search(r'hx-get="([^"]+)"', tag.group(0))
+        assert url is not None, f"нет hx-get у элемента с {marker}"
+        return html.unescape(url.group(1))
+
+    def window_url(self, oldest: Turn, *, older: bool = False) -> str:
+        params = {"since": oldest.created_at.isoformat(), "since_pk": oldest.pk}
+        if older:
+            params["older"] = "1"
+        return f"{reverse('assistant:chat')}?{urlencode(params)}"
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_first_page_shows_only_the_newest_turns_and_offers_earlier(self):
+        self.history()
+
+        response = self.client.get(reverse("assistant:chat"))
+
+        self.assertContains(response, "Эпсилон")
+        self.assertContains(response, "Дельта")
+        self.assertNotContains(response, "Гамма")
+        self.assertContains(response, "Загрузить более ранние")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_earlier_page_continues_the_window_without_duplicates(self):
+        self.history()
+        first = self.client.get(reverse("assistant:chat"))
+
+        second = self.client.get(
+            self.hx_get_url(first, "data-load-earlier"), headers={"HX-Request": "true"}
+        )
+
+        self.assertNotContains(second, "<html")
+        for text in ("Бета", "Гамма", "Дельта", "Эпсилон"):
+            self.assertContains(second, text, count=1)
+        self.assertNotContains(second, "Альфа")
+        self.assertContains(second, "Загрузить более ранние")
+
+        third = self.client.get(
+            self.hx_get_url(second, "data-load-earlier"), headers={"HX-Request": "true"}
+        )
+
+        for text in self.TEXTS:
+            self.assertContains(third, text, count=1)
+        self.assertNotContains(third, "Загрузить более ранние")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_last_page_does_not_offer_or_repeat_earlier_turns(self):
+        self.history()
+
+        oldest = Turn.objects.order_by("created_at", "pk").first()
+        assert oldest is not None
+        response = self.client.get(
+            self.window_url(oldest, older=True), headers={"HX-Request": "true"}
+        )
+
+        for text in self.TEXTS:
+            self.assertContains(response, text, count=1)
+        self.assertNotContains(response, "Загрузить более ранние")
+        self.assertEqual(response.status_code, 200)
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_polling_keeps_the_loaded_window(self):
+        self.history()
+        first = self.client.get(reverse("assistant:chat"))
+        second = self.client.get(
+            self.hx_get_url(first, "data-load-earlier"), headers={"HX-Request": "true"}
+        )
+        loaded = self.client.get(
+            self.hx_get_url(second, "data-load-earlier"), headers={"HX-Request": "true"}
+        )
+
+        poll_url = self.hx_get_url(loaded, 'hx-trigger="every 2s"')
+        polled = self.client.get(poll_url, headers={"HX-Request": "true"})
+
+        self.assertIn("since=", poll_url)
+        for text in self.TEXTS:
+            self.assertContains(polled, text, count=1)
+        self.assertNotContains(polled, "Загрузить более ранние")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_restarted_poll_without_a_window_shows_only_the_first_page(self):
+        self.history()
+
+        polled = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+
+        self.assertContains(polled, "Эпсилон")
+        self.assertNotContains(polled, "Альфа")
+
+    @override_settings(ASSISTANT_FEED_TURNS=2)
+    def test_broken_window_address_falls_back_to_the_first_page(self):
+        self.history()
+
+        response = self.client.get(
+            reverse("assistant:chat"), {"since": "вчера", "since_pk": "не число"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Загрузить более ранние")
+
+    @override_settings(ASSISTANT_FEED_TURNS=1)
+    def test_replaced_attempt_is_not_shown_again_in_the_history(self):
+        self.send("Альфа")
+        failed = self.only_turn()
+        self.client.post(reverse("assistant:chat_cancel"))
+        self.send("Альфа", retry_turn_id=failed.pk)
+        self.send("Бета")
+
+        page = self.client.get(reverse("assistant:chat"))
+        older = self.client.get(
+            self.hx_get_url(page, "data-load-earlier"), headers={"HX-Request": "true"}
+        )
+
+        self.assertNotContains(page, "Альфа")
+        self.assertContains(page, "Бета")
+        self.assertContains(older, "Альфа", count=1)
+        self.assertNotContains(older, TURN_CANCELLED)
+
+    def test_foreign_window_cannot_open_another_members_feed(self):
+        foreign = Conversation.for_member(self.other)
+        turn = Turn.objects.create(conversation=foreign, request_dedupe_key="x")
+        Message.objects.create(
+            conversation=foreign, turn=turn, role=Message.Role.USER, text="Чужой секрет"
+        )
+        self.send("Мой ход")
+
+        response = self.client.get(self.window_url(turn), headers={"HX-Request": "true"})
+
+        self.assertContains(response, "Мой ход")
+        self.assertNotContains(response, "Чужой секрет")
+
+    def test_history_query_skips_photo_bytes_and_does_not_grow_with_turns(self):
+        self.send("Альфа")
+
+        def captured() -> list[dict]:
+            with CaptureQueriesContext(connection) as queries:
+                response = self.client.get(reverse("assistant:chat"))
+                self.assertEqual(response.status_code, 200)
+            return list(queries.captured_queries)
+
+        single = captured()
+        for text in self.TEXTS[1:]:
+            self.send(text)
+        many = captured()
+
+        self.assertEqual(len(single), len(many))
+        message_sql = [query["sql"] for query in many if '"assistant_message"' in query["sql"]]
+        self.assertTrue(message_sql)
+        self.assertTrue(all('"photo"' not in sql for sql in message_sql))

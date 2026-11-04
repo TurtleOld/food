@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -11,6 +13,8 @@ from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.generic import ListView, TemplateView, UpdateView, View
 
 from assistant.budget import month_summary
@@ -21,7 +25,7 @@ from assistant.chat import (
     recover_stale_running_turns,
     retry_turn,
     start_turn,
-    turn_cards,
+    turn_page,
 )
 from assistant.forms import (
     ChatMessageForm,
@@ -229,16 +233,37 @@ class ProposalRejectView(ProposalDecisionView):
         return reject_proposal(member, proposal_id)
 
 
-def _chat_context(member: Any, form: ChatMessageForm | None = None) -> dict[str, Any]:
-    """Лента человека и форма отправки; потерянные задачи ходов возвращаются в очередь."""
+def _chat_context(
+    member: Any,
+    *,
+    window: tuple[datetime.datetime, int] | None = None,
+    load_older: bool = False,
+    form: ChatMessageForm | None = None,
+) -> dict[str, Any]:
+    """Лента человека и форма отправки; потерянные задачи ходов возвращаются в очередь.
+
+    Адреса опроса и подгрузки несут курсор показанного окна: иначе ответ опроса
+    или порция ранних ходов откатили бы ленту к первой порции.
+    """
     conversation = Conversation.for_member(member)
     recover_stale_running_turns(conversation)
     for turn_id in recover_stale_pending_turns(conversation):
         enqueue_on_commit(execute_turn_task, turn_id)
-    cards = turn_cards(conversation)
+    page = turn_page(conversation, since=window, load_older=load_older)
+    poll_url = older_url = ""
+    if page.oldest is not None:
+        cursor = {
+            "since": page.oldest.created_at.isoformat(),
+            "since_pk": page.oldest.pk,
+        }
+        poll_url = f"{reverse('assistant:chat')}?{urlencode(cursor)}"
+        if page.has_earlier:
+            older_url = f"{poll_url}&older=1"
     return {
-        "cards": cards,
-        "active": any(card.turn.is_active for card in cards),
+        "cards": page.cards,
+        "active": any(card.turn.is_active for card in page.cards),
+        "poll_url": poll_url,
+        "older_url": older_url,
         "pending_proposals": Proposal.objects.filter(
             member_id=member.pk, status=Proposal.Status.PENDING
         ).select_related("product"),
@@ -246,6 +271,21 @@ def _chat_context(member: Any, form: ChatMessageForm | None = None) -> dict[str,
         "photo_max_mb": max(1, settings.ASSISTANT_PHOTO_MAX_BYTES // (1024 * 1024)),
         "can_edit": member.is_staff,
     }
+
+
+def _window_start(request: HttpRequest) -> tuple[datetime.datetime, int] | None:
+    """Начало показанного окна из `since`/`since_pk`; испорченный адрес окно не ломает."""
+    raw, raw_pk = request.GET.get("since"), request.GET.get("since_pk")
+    if not raw or not raw_pk:
+        return None
+    moment = parse_datetime(raw)
+    try:
+        pk = int(raw_pk)
+    except (TypeError, ValueError):
+        return None
+    if moment is None or timezone.is_naive(moment) or pk < 1:
+        return None
+    return moment, pk
 
 
 class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
@@ -256,14 +296,20 @@ class ChatView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context.update(_chat_context(self.request.user))
+        context.update(
+            _chat_context(
+                self.request.user,
+                window=_window_start(self.request),
+                load_older=self.request.GET.get("older") == "1",
+            )
+        )
         return context
 
 
 def _chat_response(request: HttpRequest, form: ChatMessageForm | None = None) -> HttpResponse:
     """Полная страница ленты или её фрагмент `chat` с лентой и формой для htmx."""
     template = "assistant/chat.html#chat" if request.htmx else "assistant/chat.html"  # type: ignore[attr-defined]
-    return render(request, template, _chat_context(request.user, form))
+    return render(request, template, _chat_context(request.user, form=form))
 
 
 class ChatSendView(HtmxLoginRequiredMixin, View):

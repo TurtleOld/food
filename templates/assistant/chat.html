@@ -22,8 +22,15 @@
     {% partialdef feed %}
       <div id="feed" class="chat-feed" tabindex="0" aria-label="Лента чата"
            aria-busy="{% if active %}true{% else %}false{% endif %}"
-           {% if active %}hx-get="{% url 'assistant:chat' %}" hx-trigger="every 2s" hx-target="#feed" hx-swap="outerHTML"{% endif %}>
+           {% if active and poll_url %}hx-get="{{ poll_url }}" hx-trigger="every 2s" hx-target="#feed" hx-swap="outerHTML"{% endif %}>
         <div class="chat-turns">
+          {% if older_url %}
+            <button type="button" class="btn-quiet" data-load-earlier
+                    hx-get="{{ older_url }}" hx-target="#feed" hx-swap="outerHTML settle:0s"
+                    hx-sync="#feed:replace">
+              Загрузить более ранние
+            </button>
+          {% endif %}
           {% for card in cards %}
             <article class="chat-turn">
               {% if card.user %}
@@ -150,6 +157,7 @@
 
 {% block scripts %}
   <script src="{% static 'js/composer.js' %}"></script>
+  <script src="{% static 'js/history.js' %}"></script>
   <script>
     // Лента прокручивается внутри своей области, поэтому и следим за её краем,
     // а не за окном. Замена `#feed` через outerHTML сбрасывает scrollTop нового
