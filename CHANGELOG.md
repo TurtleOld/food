@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/TurtleOld/food/compare/v0.3.0...v0.4.0) (2026-11-04)
+
+
+### Features
+
+* **assistant:** cancel a stuck turn ([#47](https://github.com/TurtleOld/food/issues/47)) ([1e4ded3](https://github.com/TurtleOld/food/commit/1e4ded3300977952b459825cdf10a1632b964aa7))
+
+
+### Bug Fixes
+
+* **push:** build service worker static prefix without manifest lookup ([#46](https://github.com/TurtleOld/food/issues/46)) ([96736f0](https://github.com/TurtleOld/food/commit/96736f050a634a31d2003c15f31ff3d4f992b6e9))
+
 ## [0.3.0](https://github.com/TurtleOld/food/compare/v0.2.0...v0.3.0) (2026-11-04)
 
 
