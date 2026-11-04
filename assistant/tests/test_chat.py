@@ -812,7 +812,7 @@ class PromptBudgetTest(ChatTestCase):
         self.assertEqual(prompt[0]["role"], "system")
         self.assertEqual(prompt[-1]["content"][1]["type"], "image_url")
         history = json.dumps(prompt, ensure_ascii=False)
-        self.assertIn("старое-11-", history)
+        self.assertIn("ответ-11-", history)
         self.assertNotIn("старое-0-", history)
 
     def test_photo_with_text_within_the_limit_is_not_rejected(self):
@@ -889,6 +889,53 @@ class PromptBudgetTest(ChatTestCase):
         self.assertLessEqual(
             text_tokens(results[0]["content"]), text_tokens(results[-1]["content"])
         )
+
+
+class CurrentDateTest(ChatTestCase):
+    """Текущая дата: системная роль, дата Предложения по умолчанию и явная дата."""
+
+    today = datetime.date(2025, 1, 15)
+
+    def test_system_role_contains_local_date_and_weekday(self):
+        self.send("Привет")
+        turn = self.only_turn()
+
+        with mock.patch("django.utils.timezone.localdate", return_value=self.today):
+            script = self.run_with(turn, Script(answer("Хорошо.")))
+
+        system = script.calls[0]["messages"][0]
+        self.assertEqual(system["role"], "system")
+        self.assertIn("15.01.2025", system["content"])
+        self.assertIn("среда", system["content"])
+        self.assertIn("«дата не указана, считаю сегодня — 15.01.2025»", system["content"])
+
+    def test_entry_proposal_without_date_is_created_for_today(self):
+        product = Product.objects.get(name="Молоко 3.2%")
+        with mock.patch("django.utils.timezone.localdate", return_value=self.today):
+            _, output, _ = self.run_tool(
+                "propose_entry",
+                {"product_id": product.pk, "amount": 150, "meal_type": "lunch"},
+            )
+
+        self.assertEqual(Proposal.objects.get().date, self.today)
+        self.assertTrue(output["date_assumed"])
+        self.assertIn("сегодня — 15.01.2025", output["note"])
+
+    def test_explicit_date_is_saved_instead_of_today(self):
+        product = Product.objects.get(name="Молоко 3.2%")
+        with mock.patch("django.utils.timezone.localdate", return_value=self.today):
+            _, output, _ = self.run_tool(
+                "propose_entry",
+                {
+                    "product_id": product.pk,
+                    "amount": 150,
+                    "date": "2026-10-31",
+                    "meal_type": "lunch",
+                },
+            )
+
+        self.assertEqual(Proposal.objects.get().date, datetime.date(2026, 10, 31))
+        self.assertNotIn("date_assumed", output)
 
 
 class ToolTurnTest(ChatTestCase):
@@ -1043,13 +1090,13 @@ class ToolTurnTest(ChatTestCase):
         self.assertRedirects(confirm, reverse("assistant:proposals"))
         self.assertEqual(DiaryEntry.objects.get().amount, Decimal("150.0"))
 
-    def test_entry_proposal_asks_for_missing_date_and_meal_before_existing(self):
+    def test_entry_proposal_asks_for_missing_meal_before_existing(self):
         _, output, _ = self.run_tool(
             "propose_entry", {"product_id": self.product.pk, "amount": 100}
         )
 
         self.assertTrue(output["needs_clarification"])
-        self.assertEqual(output["missing"], ["date", "meal_type"])
+        self.assertEqual(output["missing"], ["meal_type"])
         self.assertIn("Приём пищи", output["question"])
         self.assertEqual(Proposal.objects.count(), 0)
 

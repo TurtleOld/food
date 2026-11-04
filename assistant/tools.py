@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any, Callable
 
+from django.utils import timezone
+
 from assistant.models import Proposal
 from assistant.proposals import (
     ProposalError,
@@ -244,14 +246,13 @@ def read_profile(member: Any) -> dict[str, Any]:
     }
 
 
-def _clarification(missing: list[str]) -> dict[str, Any]:
-    questions = []
-    if "date" in missing:
-        questions.append("На какой день добавить Запись? Формат ГГГГ-ММ-ДД.")
-    if "meal_type" in missing:
-        labels = ", ".join(_MEAL_LABELS[value].lower() for value in _MEAL_VALUES)
-        questions.append(f"В какой Приём пищи? Варианты: {labels}.")
-    return {"needs_clarification": True, "missing": missing, "question": " ".join(questions)}
+def _clarification() -> dict[str, Any]:
+    labels = ", ".join(_MEAL_LABELS[value].lower() for value in _MEAL_VALUES)
+    return {
+        "needs_clarification": True,
+        "missing": ["meal_type"],
+        "question": f"В какой Приём пищи? Варианты: {labels}.",
+    }
 
 
 def propose_product(member: Any, new_product: Any) -> dict[str, Any]:
@@ -271,14 +272,16 @@ def propose_entry(
     product_id: Any = None,
     new_product: Any = None,
 ) -> dict[str, Any]:
-    """Готовит Предложение Записи; без ясных даты и Приёма пищи его не создаёт."""
-    missing = []
-    if not str(date or "").strip():
-        missing.append("date")
+    """Готовит Предложение Записи; без Приёма пищи его не создаёт.
+
+    Неназванную дату заменяет сегодняшней: Предложение получает текущий день,
+    а ответ модели — подсказку сказать об этом человеку.
+    """
+    assumed_date = not str(date or "").strip()
+    if assumed_date:
+        date = timezone.localdate()
     if not str(meal_type or "").strip():
-        missing.append("meal_type")
-    if missing:
-        return _clarification(missing)
+        return _clarification()
     if amount in (None, ""):
         return {"error": "Укажите количество в граммах или миллилитрах"}
     proposal = create_proposal(
@@ -290,10 +293,16 @@ def propose_entry(
         new_product=new_product,
     )
     similar = similar_products(proposal.new_name) if proposal.product_id is None else []
-    return {
+    result: dict[str, Any] = {
         "proposal": _proposal(proposal),
         "similar": [_product(product) for product in similar],
     }
+    if assumed_date:
+        result["date_assumed"] = True
+        result["note"] = (
+            f"Дата не указана, считаю сегодня — {date:%d.%m.%Y}. Скажи об этом человеку."
+        )
+    return result
 
 
 _HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
@@ -440,12 +449,17 @@ TOOLS: list[dict[str, Any]] = [
         "propose_entry",
         (
             "Подготовить Предложение Записи с существующим или новым Продуктом. "
-            "Дата и Приём пищи обязательны: если человек их не назвал, не создавай "
-            "Предложение, а спроси недостающее."
+            "Без названной даты Предложение создаётся на сегодня, и об этом надо явно "
+            "сказать человеку. Если не назван Приём пищи, спроси его и не создавай "
+            "Предложение молча."
         ),
         {
             "amount": {"type": "number", "description": "Количество в г или мл"},
-            "date": {"type": "string", "format": "date", "description": "День Записи, ГГГГ-ММ-ДД"},
+            "date": {
+                "type": "string",
+                "format": "date",
+                "description": "День Записи, ГГГГ-ММ-ДД; не указан — сегодня",
+            },
             "meal_type": {"type": "string", "enum": _MEAL_VALUES, "description": "Приём пищи"},
             "product_id": {"type": "integer", "description": "id Продукта из Каталога"},
             "new_product": _NEW_PRODUCT_SCHEMA,
