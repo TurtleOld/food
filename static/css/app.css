@@ -884,10 +884,36 @@ body:has(.login) {
   overflow-x: auto;
 }
 
-.chat-markdown table {
-  display: block;
+/* Wide КБЖУ tables scroll inside the answer instead of stretching the feed. */
+.chat-table-scroll {
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.chat-markdown table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.chat-markdown table th {
+  white-space: nowrap;
+}
+
+/* Numeric columns stay on one line and line up by the right edge. */
+.chat-markdown .chat-num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The total row reads as a result rather than one more data row. */
+.chat-markdown tr.chat-total td {
+  border-top: 2px solid var(--bulma-border);
+  background: var(--bulma-scheme-main-bis);
+  font-weight: 600;
 }
 
 .chat-markdown pre {
@@ -1006,38 +1032,62 @@ body:has(.login) {
    while the feed scrolls; the page opens scrolled to it instead. */
 .chat-composer {
   margin-top: 1rem;
-  padding: 0.75rem 0.9rem;
+  margin-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  padding: 0.45rem;
   background: var(--bulma-scheme-main);
+  border: 1px solid var(--bulma-border-weak);
   border-radius: var(--bulma-radius-large);
   box-shadow: var(--soft-shadow);
 }
 
-.chat-composer .label {
-  margin-bottom: 0.35rem;
-  font-size: 0.8rem;
+.chat-composer:focus-within {
+  border-color: var(--bulma-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bulma-primary) 22%, transparent),
+    var(--soft-shadow);
 }
 
-.chat-text {
-  min-height: 3rem;
-  max-height: 10rem;
-  resize: vertical;
+@media (min-width: 1024px) {
+  .chat-composer {
+    margin-bottom: 0;
+  }
+}
+
+.chat-composer .chat-composer-input {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+}
+
+.chat-composer .chat-composer-input:focus {
+  border: 0;
+  box-shadow: none;
+  outline: none;
 }
 
 .chat-composer-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
-  margin-top: 0.7rem;
+  gap: 0.5rem;
+  padding: 0 0.35rem;
 }
 
 .chat-photo-pick {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.2rem;
   min-width: 0;
+}
+
+.chat-photo-button {
+  white-space: nowrap;
 }
 
 /* Visually hidden but still keyboard-focusable: the label is the visible button. */
@@ -1055,22 +1105,37 @@ body:has(.login) {
   outline-offset: 1px;
 }
 
+.chat-photo-remove {
+  padding: 0.2rem 0.45rem;
+}
+
 .chat-file-name {
-  max-width: 11rem;
+  min-width: 0;
+  max-width: 9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.8rem;
 }
 
 .chat-send {
+  flex: none;
   width: auto;
-  min-width: 8rem;
-  padding: 0.7rem 1.2rem;
+  min-width: 0;
+  padding: 0.6rem 1.1rem;
+  white-space: nowrap;
 }
 
 .chat-send:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.chat-composer-hint {
+  margin: 0.35rem 0.45rem 0.15rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--bulma-text-weak);
 }
 
 /* Proposal cards: the same card in the chat feed and on the proposals screen. */
@@ -1102,6 +1167,16 @@ body:has(.login) {
 .proposal-nutrition,
 .proposal-similar {
   margin-bottom: 0.25rem;
+}
+
+/* КБЖУ wraps between values, never inside a number. */
+.proposal-nutrition {
+  overflow-wrap: normal;
+}
+
+.proposal-nutrition span,
+.proposal-meta span {
+  white-space: nowrap;
 }
 
 .proposal-actions {

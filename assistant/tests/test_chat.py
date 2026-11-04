@@ -28,6 +28,7 @@ from assistant.chat import (
 from assistant.gateway import LLMGatewayError, LLMResult, ToolCall, Usage
 from assistant.models import Conversation, LLMSettings, Message, Proposal, Turn
 from assistant.prompt_budget import TOOL_RESULT_MAX_TOKENS, estimated_input_tokens, text_tokens
+from assistant.templatetags.chat_markdown import markdown
 from assistant.tools import TOOLS
 from core.models import Barcode, DailyTarget, DiaryEntry, Product, Profile, WeightMeasurement
 from core.off import OffLookup, Outcome
@@ -296,6 +297,42 @@ class ChatScreenTest(ChatTestCase):
         self.assertContains(response, 'id="chat"')
         self.assertContains(response, 'id="chat-composer"')
         self.assertNotContains(response, "<html")
+
+
+class ComposerTest(ChatTestCase):
+    """Композер: htmx-контракт формы, блокировка во время хода, сохранение текста."""
+
+    def test_composer_keeps_the_htmx_contract_and_a_single_line_field(self):
+        page = self.client.get(reverse("assistant:chat"))
+        send_url = reverse("assistant:chat_send")
+
+        self.assertContains(page, f'hx-post="{send_url}"')
+        self.assertContains(page, 'hx-target="#chat"')
+        self.assertContains(page, 'hx-swap="outerHTML"')
+        self.assertContains(page, "hx-disabled-elt")
+        self.assertContains(page, 'rows="1"')
+        self.assertContains(page, 'enterkeyhint="send"')
+        self.assertContains(page, "Камера, галерея или файл")
+
+    def test_send_button_is_disabled_only_while_a_turn_runs(self):
+        self.send("Привет")
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertContains(page, "Ассистент думает")
+        self.assertContains(page, 'disabled aria-disabled="true"')
+
+        self.run_with(self.only_turn(), Script(answer("Готово")))
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(page, 'aria-disabled="true"')
+
+    def test_rejected_message_keeps_the_typed_text(self):
+        response = self.send(
+            "Мой текст",
+            SimpleUploadedFile("notes.txt", b"not an image", content_type="text/plain"),
+        )
+
+        self.assertContains(response, "JPEG")
+        self.assertContains(response, "Мой текст")
+        self.assertEqual(Turn.objects.count(), 0)
 
 
 class PhotoTest(ChatTestCase):
@@ -1232,7 +1269,7 @@ class MarkdownAnswerTest(ChatTestCase):
                     "<ol>",
                     "<table>",
                     "<th>Продукт</th>",
-                    "<td>50</td>",
+                    '<td class="chat-num">50</td>',
                     '<pre><code class="language-python">',
                     "&lt;tag&gt;",
                     "<code>код</code>",
@@ -1269,3 +1306,74 @@ class MarkdownAnswerTest(ChatTestCase):
         ):
             self.assertNotContains(page, tag)
         self.assertContains(page, "&lt;script&gt;")
+
+
+class ChatMarkdownTableTest(ChatTestCase):
+    def test_kbju_table_scrolls_inside_the_answer_and_keeps_numbers_whole(self):
+        self.send("Сводка за день")
+        turn = self.only_turn()
+        self.run_with(
+            turn,
+            Script(
+                answer(
+                    "| Продукт | Количество | Ккал | Б |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| Молоко | 150 г | 29,2 | 3,2 |\n"
+                    "| Итого | 150 г | 62,0 | ≥643 |\n"
+                )
+            ),
+        )
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertContains(page, '<div class="chat-table-scroll">')
+        self.assertContains(page, '<th class="chat-num">Количество</th>')
+        self.assertContains(page, '<td class="chat-num">29,2</td>')
+        self.assertContains(page, '<td class="chat-num">≥643</td>')
+        self.assertContains(page, '<tr class="chat-total">')
+        self.assertContains(page, "<td>Молоко</td>")
+
+    def test_table_markup_stays_safe(self):
+        self.send("Таблица")
+        turn = self.only_turn()
+        table = "| Подпись |\n| --- |\n| <script>alert(1)</script> |\n| [js](javascript:alert(1)) |"
+        self.run_with(turn, Script(answer(table)))
+        page = self.client.get(reverse("assistant:chat"), headers={"HX-Request": "true"})
+        self.assertNotContains(page, "<script")
+        self.assertNotContains(page, 'href="javascript:')
+        self.assertContains(page, "&lt;script&gt;")
+
+
+class ChatMarkdownFilterTest(TestCase):
+    def test_numeric_columns_and_total_row_are_marked(self):
+        rendered = markdown(
+            "| Продукт | Количество | Ккал |\n"
+            "| --- | --- | --- |\n"
+            "| Молоко | 1,5 л | 62,0 |\n"
+            "| Итого | 1,5 л | 62,0 |"
+        )
+        self.assertTrue(rendered.startswith('<div class="chat-table-scroll"><table>'))
+        self.assertTrue(rendered.endswith("</table>\n</div>\n"))
+        self.assertIn('<th class="chat-num">Количество</th>', rendered)
+        self.assertIn('<th class="chat-num">Ккал</th>', rendered)
+        self.assertIn('<td class="chat-num">1,5 л</td>', rendered)
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+        self.assertIn('<tr class="chat-total">', rendered)
+        self.assertIn("<td>Молоко</td>", rendered)
+
+    def test_text_column_is_not_marked_numeric(self):
+        rendered = markdown("| Продукт | Ккал |\n| --- | --- |\n| Молоко 3,2% | 62,0 |")
+        self.assertNotIn("chat-total", rendered)
+        self.assertIn("<td>Молоко 3,2%</td>", rendered)
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+
+    def test_dash_placeholders_do_not_hide_numeric_columns(self):
+        rendered = markdown("| Ккал |\n| --- |\n| 62,0 |\n| — |")
+        self.assertIn('<td class="chat-num">62,0</td>', rendered)
+        self.assertIn('<td class="chat-num">—</td>', rendered)
+
+    def test_html_is_still_escaped_and_links_are_validated(self):
+        rendered = markdown(
+            "<img src=x onerror=alert(1)>\n\n| a |\n| --- |\n| [x](javascript:alert(1)) |"
+        )
+        self.assertNotIn("<img", rendered)
+        self.assertIn("&lt;img", rendered)
+        self.assertNotIn('href="javascript:', rendered)
