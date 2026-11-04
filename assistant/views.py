@@ -242,6 +242,7 @@ def _chat_context(member: Any, form: ChatMessageForm | None = None) -> dict[str,
         ).select_related("product"),
         "form": form or ChatMessageForm(),
         "photo_max_mb": max(1, settings.ASSISTANT_PHOTO_MAX_BYTES // (1024 * 1024)),
+        "can_edit": member.is_staff,
     }
 
 
