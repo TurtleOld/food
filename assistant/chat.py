@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 import logging
+import time
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -63,6 +64,7 @@ class TurnCard:
     turn: Turn
     user: Message | None
     answer: Message | None
+    elapsed: int | None = None
 
 
 def _dedupe_key(text: str, photo: PreparedPhoto | None) -> str:
@@ -310,7 +312,10 @@ def execute_turn(turn_id: int) -> None:
     """
     turn = _claim(turn_id)
     if turn is None:
+        logger.info("Turn %s: claim skipped (already running or finished)", turn_id)
         return
+    started = time.monotonic()
+    logger.info("Turn %s: started", turn_id)
     try:
         try:
             text = _run_agent(turn)
@@ -327,6 +332,7 @@ def execute_turn(turn_id: int) -> None:
         logger.exception("Assistant turn %s failed unexpectedly", turn_id)
         _finish(turn, status=Turn.Status.FAILED, error=TURN_FAILED)
     finally:
+        logger.info("Turn %s: finished in %.1fs", turn_id, time.monotonic() - started)
         _clear_photos(turn)
 
 
@@ -388,6 +394,7 @@ def turn_cards(conversation: Conversation) -> list[TurnCard]:
     )
     turns.reverse()
     cards = []
+    now = timezone.now()
     for turn in turns:
         messages = list(turn.messages.all())
         cards.append(
@@ -395,6 +402,7 @@ def turn_cards(conversation: Conversation) -> list[TurnCard]:
                 turn=turn,
                 user=next((m for m in messages if m.role == Message.Role.USER), None),
                 answer=next((m for m in messages if m.role == Message.Role.ASSISTANT), None),
+                elapsed=int((now - turn.created_at).total_seconds()) if turn.is_active else None,
             )
         )
     return cards

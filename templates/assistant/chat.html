@@ -61,7 +61,7 @@
               {% else %}
                 <div class="chat-bubble chat-message-assistant chat-waiting" role="status" aria-live="polite">
                   <span class="chat-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-                  <span>Ассистент думает…</span>
+                  <span>Ассистент думает… {{ card.elapsed }} с</span>
                 </div>
               {% endif %}
             </article>
