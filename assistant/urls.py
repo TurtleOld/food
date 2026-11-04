@@ -10,6 +10,7 @@ urlpatterns = [
     path("summaries/", views.SummarySettingsView.as_view(), name="summaries"),
     path("chat/", views.ChatView.as_view(), name="chat"),
     path("chat/send/", views.ChatSendView.as_view(), name="chat_send"),
+    path("chat/cancel/", views.ChatCancelView.as_view(), name="chat_cancel"),
     path("proposals/", views.ProposalListView.as_view(), name="proposals"),
     path(
         "proposals/<int:pk>/edit/",

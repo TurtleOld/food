@@ -21,6 +21,7 @@ from assistant.chat import (
     INTERRUPTED,
     PROVIDER_FAILED,
     TOO_MANY_STEPS,
+    TURN_CANCELLED,
     TURN_FAILED,
     execute_turn,
 )
@@ -437,6 +438,51 @@ class FailureAndRetryTest(ChatTestCase):
 
         self.assertContains(page, "Фото удалено")
         self.assertNotContains(page, "Повторить")
+
+
+class ChatCancelTest(ChatTestCase):
+    def test_cancel_fails_the_pending_turn_and_offers_retry(self):
+        self.send("Сколько калорий в молоке?")
+        turn = self.only_turn()
+
+        response = self.client.post(
+            reverse("assistant:chat_cancel"),
+            headers={"HX-Request": "true"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, TURN_CANCELLED)
+        turn.refresh_from_db()
+        self.assertEqual(turn.status, Turn.Status.FAILED)
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(page, "Ассистент думает")
+        self.assertContains(page, "Повторить")
+
+    def test_cancel_clears_the_transient_photo(self):
+        self.send("Что на фото?", photo())
+        turn = self.only_turn()
+
+        response = self.client.post(reverse("assistant:chat_cancel"))
+
+        self.assertRedirects(response, reverse("assistant:chat"))
+        turn.refresh_from_db()
+        self.assertIsNone(turn.messages.get().photo)
+
+    def test_cancel_without_an_active_turn_is_harmless(self):
+        response = self.client.post(reverse("assistant:chat_cancel"))
+
+        self.assertRedirects(response, reverse("assistant:chat"))
+        self.assertEqual(Turn.objects.count(), 0)
+
+    def test_cancel_touches_only_the_members_own_turn(self):
+        self.send("Мой вопрос")
+        turn = self.only_turn()
+        self.client.force_login(self.other)
+
+        self.client.post(reverse("assistant:chat_cancel"))
+
+        turn.refresh_from_db()
+        self.assertEqual(turn.status, Turn.Status.PENDING)
 
 
 class ExecutionTest(ChatTestCase):
