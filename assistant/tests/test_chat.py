@@ -279,6 +279,42 @@ class ChatScreenTest(ChatTestCase):
         self.assertNotContains(response, "<html")
 
 
+class ComposerTest(ChatTestCase):
+    """Композер: htmx-контракт формы, блокировка во время хода, сохранение текста."""
+
+    def test_composer_keeps_the_htmx_contract_and_a_single_line_field(self):
+        page = self.client.get(reverse("assistant:chat"))
+        send_url = reverse("assistant:chat_send")
+
+        self.assertContains(page, f'hx-post="{send_url}"')
+        self.assertContains(page, 'hx-target="#chat"')
+        self.assertContains(page, 'hx-swap="outerHTML"')
+        self.assertContains(page, "hx-disabled-elt")
+        self.assertContains(page, 'rows="1"')
+        self.assertContains(page, 'enterkeyhint="send"')
+        self.assertContains(page, "Камера, галерея или файл")
+
+    def test_send_button_is_disabled_only_while_a_turn_runs(self):
+        self.send("Привет")
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertContains(page, "Ассистент думает")
+        self.assertContains(page, 'disabled aria-disabled="true"')
+
+        self.run_with(self.only_turn(), Script(answer("Готово")))
+        page = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(page, 'aria-disabled="true"')
+
+    def test_rejected_message_keeps_the_typed_text(self):
+        response = self.send(
+            "Мой текст",
+            SimpleUploadedFile("notes.txt", b"not an image", content_type="text/plain"),
+        )
+
+        self.assertContains(response, "JPEG")
+        self.assertContains(response, "Мой текст")
+        self.assertEqual(Turn.objects.count(), 0)
+
+
 class PhotoTest(ChatTestCase):
     def test_valid_photo_is_sent_once_as_an_image_and_deleted_after_the_answer(self):
         response = self.send("Что на этикетке?", photo())
