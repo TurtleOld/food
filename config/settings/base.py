@@ -127,3 +127,21 @@ ASSISTANT_FEED_TURNS = 50
 
 # Контакт для User-Agent запросов к Open Food Facts: их правила требуют указать приложение и связь.
 OFF_CONTACT = os.environ.get("OFF_CONTACT", "dev@pavlovteam.ru")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "console": {
+            "format": "{asctime} {levelname} {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "console"},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+    "loggers": {
+        "assistant": {"level": os.environ.get("ASSISTANT_LOG_LEVEL", "INFO")},
+    },
+}

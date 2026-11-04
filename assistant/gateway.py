@@ -6,6 +6,8 @@
 """
 
 import json
+import logging
+import time
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -20,6 +22,8 @@ from assistant.models import LLMSettings
 # для кириллицы. Изображение оценивается фиксированным бюджетом на высокое разрешение.
 IMAGE_TOKENS = 4096
 MESSAGE_OVERHEAD_TOKENS = 16
+
+logger = logging.getLogger(__name__)
 
 
 class LLMGatewayError(Exception):
@@ -108,6 +112,8 @@ def _payload(
 
 
 def _post(settings: LLMSettings, payload: dict[str, Any]) -> dict[str, Any]:
+    logger.info("LLM -> %s, model %s", settings.base_url, settings.model)
+    logger.debug("LLM payload: %s", json.dumps(payload, ensure_ascii=False))
     request = Request(
         f"{settings.base_url.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode(),
@@ -117,11 +123,15 @@ def _post(settings: LLMSettings, payload: dict[str, Any]) -> dict[str, Any]:
         },
         method="POST",
     )
+    started = time.monotonic()
     try:
         with urlopen(request, timeout=settings.timeout_seconds) as response:  # noqa: S310
             body = response.read()
     except (OSError, ValueError) as error:  # URLError, HTTPError и таймаут — тоже OSError
+        latency = time.monotonic() - started
+        logger.warning("LLM <- %s after %.1fs: %s", settings.base_url, latency, error)
         raise LLMGatewayError("Провайдер модели не ответил") from error
+    logger.info("LLM <- %s bytes in %.1fs", len(body), time.monotonic() - started)
     try:
         data = json.loads(body)
     except ValueError as error:
