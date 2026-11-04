@@ -12,6 +12,9 @@
         </a>
         <a class="btn-quiet" href="{% url 'assistant:summaries' %}">Сводки</a>
         <a class="btn-quiet" href="{% url 'assistant:budget' %}">Бюджет</a>
+        {% if can_edit %}
+          <a class="btn-quiet" href="{% url 'assistant:settings' %}">Настроить</a>
+        {% endif %}
       </div>
     </div>
 
