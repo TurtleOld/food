@@ -17,7 +17,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Prefetch, Q
+from django.db.models import F, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from assistant.budget import BudgetUnavailable
@@ -36,13 +36,39 @@ from assistant.tools import TOOLS, dispatch_tool
 
 logger = logging.getLogger(__name__)
 
+WEEKDAYS = (
+    "понедельник",
+    "вторник",
+    "среда",
+    "четверг",
+    "пятница",
+    "суббота",
+    "воскресенье",
+)
+
 SYSTEM_PROMPT = (
     "Ты — Ассистент семейного трекера КБЖУ. Отвечай по-русски, кратко и по делу. "
     "Данные Дневника, Профиля и Каталога получай только инструментами и не выдумывай КБЖУ. "
     "Новые Продукты и Записи Дневника создавай только Предложением и сам ничего не подтверждай. "
-    "Если человек не назвал дату или Приём пищи, спроси их до создания Предложения. "
+    "Если человек не назвал Приём пищи, спроси его до создания Предложения. "
+    "Сегодня — {date}, {weekday}. Если человек не назвал дату, считай сегодняшнюю, "
+    "поставь её в Предложение и явно напиши: «дата не указана, считаю сегодня — {date}». "
+    "Явно названная дата всегда важнее. Слова «сегодня», «вчера», «позавчера» и диапазоны "
+    "считай от текущей даты. "
     "По фото без этикетки количество в граммах или миллилитрах называет человек: не угадывай его."
 )
+
+
+def system_prompt(today: datetime.date | None = None) -> str:
+    """Системная роль с текущей локальной датой и днём недели.
+
+    Args:
+        today: дата для подстановки; по умолчанию — дата приложения из `timezone.localdate()`.
+    """
+    day = today or timezone.localdate()
+    return SYSTEM_PROMPT.format(date=day.strftime("%d.%m.%Y"), weekday=WEEKDAYS[day.weekday()])
+
+
 PROVIDER_FAILED = "Ассистент не ответил: провайдер модели недоступен. Попробуйте ещё раз."
 EMPTY_ANSWER = "Ассистент вернул пустой ответ. Попробуйте ещё раз."
 TOO_MANY_STEPS = "Ассистент сделал слишком много шагов за один ход. Попробуйте ещё раз."
@@ -83,6 +109,19 @@ class TurnCard:
     elapsed: int | None = None
 
 
+@dataclass(frozen=True)
+class TurnPage:
+    """Окно ленты: карточки по возрастанию времени, курсор его начала и наличие ранних.
+
+    Курсор — самый ранний показанный ход; опрос ленты передаёт его обратно, чтобы
+    ответ не сбросил уже подгруженную историю на первую порцию.
+    """
+
+    cards: list[TurnCard]
+    oldest: Turn | None
+    has_earlier: bool
+
+
 def _dedupe_key(text: str, photo: PreparedPhoto | None) -> str:
     digest = hashlib.sha256(" ".join(text.split()).encode())
     if photo is not None:
@@ -102,7 +141,7 @@ def _overflow_message(text: str, has_photo: bool) -> str:
 def _request_head_tokens(text: str, has_photo: bool) -> int:
     """Неизменяемая часть запроса: системная роль, схемы инструментов и текущее сообщение."""
     return (
-        message_tokens({"role": "system", "content": SYSTEM_PROMPT})
+        message_tokens({"role": "system", "content": system_prompt()})
         + tools_tokens(TOOLS)
         + user_message_tokens(text, has_photo)
     )
@@ -261,15 +300,16 @@ def build_prompt(turn: Turn) -> list[dict[str, Any]]:
     provider = LLMSettings.current()
     content = _user_content(message)
     has_photo = message.has_image and bool(message.photo)
+    system = system_prompt()
     fixed = (
-        message_tokens({"role": "system", "content": SYSTEM_PROMPT})
+        message_tokens({"role": "system", "content": system})
         + tools_tokens(TOOLS)
         + message_tokens({"role": "user", "content": content})
     )
     if provider.is_configured and fixed > provider.max_input_tokens:
         raise ChatError(_overflow_message(message.text, has_photo))
     history_budget = max(0, provider.max_input_tokens - fixed - TOOL_CONTEXT_RESERVE_TOKENS)
-    prompt: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    prompt: list[dict[str, Any]] = [{"role": "system", "content": system}]
     prompt.extend(_history(turn.conversation, turn, max_tokens=history_budget))
     prompt.append({"role": "user", "content": content})
     return prompt
@@ -494,15 +534,71 @@ def recover_stale_pending_turns(
     return turn_ids
 
 
-def turn_cards(conversation: Conversation) -> list[TurnCard]:
-    """Последние ходы ленты по возрастанию времени, с их сообщениями."""
-    turns = list(
-        Turn.objects.filter(conversation=conversation, replacement__isnull=True)
+def _visible_turns(conversation: Conversation) -> QuerySet[Turn]:
+    """Ходы ленты, кроме заменённых повтором: каждый поступок человека виден один раз."""
+    return Turn.objects.filter(conversation=conversation, replacement__isnull=True)
+
+
+def _older_than(turns: QuerySet[Turn], cursor: tuple[datetime.datetime, int]) -> QuerySet[Turn]:
+    """Ходы старше курсора `(created_at, pk)`; pk разводит совпадающее время."""
+    created_at, pk = cursor
+    return turns.filter(Q(created_at__lt=created_at) | Q(created_at=created_at, pk__lt=pk))
+
+
+def _at_or_after(turns: QuerySet[Turn], cursor: tuple[datetime.datetime, int]) -> QuerySet[Turn]:
+    """Ходы от курсора включительно и новее: показанное окно и всё, что после него."""
+    created_at, pk = cursor
+    return turns.filter(Q(created_at__gt=created_at) | Q(created_at=created_at, pk__gte=pk))
+
+
+def _newest(turns: QuerySet[Turn], count: int | None = None) -> list[Turn]:
+    """Ходы по убыванию времени; без `count` — всё окно, иначе его последняя порция."""
+    ordered = turns.order_by("-created_at", "-pk").prefetch_related(
         # Байты фото нужны только воркеру; лента проверяет лишь `has_image`.
-        .prefetch_related(Prefetch("messages", queryset=Message.objects.defer("photo")))
-        .order_by("-created_at", "-pk")[: settings.ASSISTANT_FEED_TURNS]
+        Prefetch("messages", queryset=Message.objects.defer("photo"))
     )
-    turns.reverse()
+    return list(ordered[:count] if count is not None else ordered)
+
+
+def turn_page(
+    conversation: Conversation,
+    *,
+    since: tuple[datetime.datetime, int] | None = None,
+    load_older: bool = False,
+) -> TurnPage:
+    """Собирает окно ленты и, если просят, продолжает его вверх более ранними ходами.
+
+    Args:
+        conversation: Лента, к которой относится окно.
+        since: Начало уже показанного окна — пара «время, pk» самого раннего хода;
+            без него отдаётся первая порция последних ходов.
+        load_older: Продолжить окно вверх порцией ходов старше `since`.
+
+    Returns:
+        Карточки окна по возрастанию времени, его самый ранний ход и признак,
+        что за ним в БД есть ещё более ранние ходы.
+    """
+    turns = _visible_turns(conversation)
+    if since is None:
+        window = _newest(turns, settings.ASSISTANT_FEED_TURNS)
+    else:
+        if load_older:
+            earlier = list(
+                _older_than(turns, since)
+                .order_by("-created_at", "-pk")
+                .values_list("created_at", "pk")[: settings.ASSISTANT_FEED_TURNS]
+            )
+            if earlier:
+                since = earlier[-1]
+        window = _newest(_at_or_after(turns, since))
+    window.reverse()
+    oldest = window[0] if window else None
+    has_earlier = oldest is not None and _older_than(turns, (oldest.created_at, oldest.pk)).exists()
+    return TurnPage(cards=_cards(window), oldest=oldest, has_earlier=has_earlier)
+
+
+def _cards(turns: list[Turn]) -> list[TurnCard]:
+    """Карточки в порядке ходов; ожидающему ходу считается прожитое время."""
     cards = []
     now = timezone.now()
     for turn in turns:
