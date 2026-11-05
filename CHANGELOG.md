@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.0](https://github.com/TurtleOld/food/compare/v0.4.1...v0.5.0) (2026-11-05)
+
+
+### Features
+
+* **assistant:** подставлять текущую дату в системную роль ([#64](https://github.com/TurtleOld/food/issues/64)) ([531b6b2](https://github.com/TurtleOld/food/commit/531b6b2d5dbd9dfea0ae8d2536bd2d05cc559456)), closes [#56](https://github.com/TurtleOld/food/issues/56)
+* **chat:** композер с отправкой по Enter и растущим полем ([#60](https://github.com/TurtleOld/food/issues/60)) ([d562d7b](https://github.com/TurtleOld/food/commit/d562d7b3e39429c4b4d8f86bf91feb8cbeb71bf8)), closes [#52](https://github.com/TurtleOld/food/issues/52)
+* **chat:** отдельная прокручиваемая лента с автопрокруткой ([#63](https://github.com/TurtleOld/food/issues/63)) ([f78fffd](https://github.com/TurtleOld/food/commit/f78fffdca106a98924e74acc119a5c768157a549))
+* **chat:** подгрузка ранних ходов ленты ([#65](https://github.com/TurtleOld/food/issues/65)) ([57d3737](https://github.com/TurtleOld/food/commit/57d3737d6e2bc7079609c7dd660969f416a7a06f))
+* **header:** цельная панель навигации и объединённый профиль ([#67](https://github.com/TurtleOld/food/issues/67)) ([050d1b5](https://github.com/TurtleOld/food/commit/050d1b5f126178154b6fb1b91c442057ccbbf82d)), closes [#66](https://github.com/TurtleOld/food/issues/66)
+
+
+### Bug Fixes
+
+* **assistant:** не давать таблицам КБЖУ рваться на узком экране ([#61](https://github.com/TurtleOld/food/issues/61)) ([7037ae7](https://github.com/TurtleOld/food/commit/7037ae702482936d01e5dc28cc4bc03b2f8e90ab))
+* **assistant:** укладывать запрос в лимит провайдера ([#62](https://github.com/TurtleOld/food/issues/62)) ([f9e6fdb](https://github.com/TurtleOld/food/commit/f9e6fdb373f82fd1154759a2c4ff99b1d882075c)), closes [#55](https://github.com/TurtleOld/food/issues/55)
+
+
+### Documentation
+
+* **agents:** switch issue tracker to GitHub ([#58](https://github.com/TurtleOld/food/issues/58)) ([30b7716](https://github.com/TurtleOld/food/commit/30b771649a97c239af3ff7a0a5cce60380c09d03))
+
 ## [0.4.1](https://github.com/TurtleOld/food/compare/v0.4.0...v0.4.1) (2026-11-04)
 
 

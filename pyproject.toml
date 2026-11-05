@@ -1,6 +1,6 @@
 [project]
 name = "food"
-version = "0.4.1"
+version = "0.5.0"
 description = "Семейный трекер КБЖУ"
 requires-python = ">=3.13"
 dependencies = [
