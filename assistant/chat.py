@@ -9,7 +9,6 @@
 import base64
 import datetime
 import hashlib
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -23,25 +22,67 @@ from django.utils import timezone
 
 from assistant.budget import BudgetUnavailable
 from assistant.gateway import LLMGatewayError, ToolCall, complete
-from assistant.models import Conversation, Message, Turn
+from assistant.models import Conversation, LLMSettings, Message, Turn
 from assistant.photos import PreparedPhoto
+from assistant.prompt_budget import (
+    TOOL_CONTEXT_RESERVE_TOKENS,
+    fit_tool_results,
+    message_tokens,
+    tool_result_content,
+    tools_tokens,
+    user_message_tokens,
+)
 from assistant.tools import TOOLS, dispatch_tool
 
 logger = logging.getLogger(__name__)
+
+WEEKDAYS = (
+    "понедельник",
+    "вторник",
+    "среда",
+    "четверг",
+    "пятница",
+    "суббота",
+    "воскресенье",
+)
 
 SYSTEM_PROMPT = (
     "Ты — Ассистент семейного трекера КБЖУ. Отвечай по-русски, кратко и по делу. "
     "Данные Дневника, Профиля и Каталога получай только инструментами и не выдумывай КБЖУ. "
     "Новые Продукты и Записи Дневника создавай только Предложением и сам ничего не подтверждай. "
-    "Если человек не назвал дату или Приём пищи, спроси их до создания Предложения. "
+    "Если человек не назвал Приём пищи, спроси его до создания Предложения. "
+    "Сегодня — {date}, {weekday}. Если человек не назвал дату, считай сегодняшнюю, "
+    "поставь её в Предложение и явно напиши: «дата не указана, считаю сегодня — {date}». "
+    "Явно названная дата всегда важнее. Слова «сегодня», «вчера», «позавчера» и диапазоны "
+    "считай от текущей даты. "
     "По фото без этикетки количество в граммах или миллилитрах называет человек: не угадывай его."
 )
+
+
+def system_prompt(today: datetime.date | None = None) -> str:
+    """Системная роль с текущей локальной датой и днём недели.
+
+    Args:
+        today: дата для подстановки; по умолчанию — дата приложения из `timezone.localdate()`.
+    """
+    day = today or timezone.localdate()
+    return SYSTEM_PROMPT.format(date=day.strftime("%d.%m.%Y"), weekday=WEEKDAYS[day.weekday()])
+
+
 PROVIDER_FAILED = "Ассистент не ответил: провайдер модели недоступен. Попробуйте ещё раз."
 EMPTY_ANSWER = "Ассистент вернул пустой ответ. Попробуйте ещё раз."
 TOO_MANY_STEPS = "Ассистент сделал слишком много шагов за один ход. Попробуйте ещё раз."
 INTERRUPTED = "Ход прервался: прошло слишком много времени. Попробуйте ещё раз."
 TURN_FAILED = "Не получилось выполнить ход. Попробуйте ещё раз."
 TURN_CANCELLED = "Ход отменён. Нажмите «Повторить», чтобы отправить заново."
+MESSAGE_TOO_LARGE = "Сообщение не помещается в лимит модели. Сократите текст."
+PHOTO_WITH_TEXT_TOO_LARGE = (
+    "Сообщение с фото не помещается в лимит модели. "
+    "Сократите текст или отправьте фото отдельным сообщением."
+)
+PHOTO_TOO_LARGE = (
+    "Фото не помещается в лимит модели. Попросите администратора увеличить лимит входных токенов."
+)
 
 ACTIVE_STATUSES = (Turn.Status.PENDING, Turn.Status.RUNNING)
 
@@ -89,6 +130,37 @@ def _dedupe_key(text: str, photo: PreparedPhoto | None) -> str:
     return digest.hexdigest()
 
 
+def _overflow_message(text: str, has_photo: bool) -> str:
+    if has_photo and text:
+        return PHOTO_WITH_TEXT_TOO_LARGE
+    if has_photo:
+        return PHOTO_TOO_LARGE
+    return MESSAGE_TOO_LARGE
+
+
+def _request_head_tokens(text: str, has_photo: bool) -> int:
+    """Неизменяемая часть запроса: системная роль, схемы инструментов и текущее сообщение."""
+    return (
+        message_tokens({"role": "system", "content": system_prompt()})
+        + tools_tokens(TOOLS)
+        + user_message_tokens(text, has_photo)
+    )
+
+
+def ensure_message_fits(text: str, *, has_photo: bool) -> None:
+    """Проверяет до создания хода, что сообщение помещается в лимит провайдера.
+
+    Raises:
+        ChatError: системная роль, схемы инструментов и текущее сообщение с фото
+            не укладываются в настроенный администратором лимит.
+    """
+    provider = LLMSettings.current()
+    if not provider.is_configured:
+        return
+    if _request_head_tokens(text, has_photo) > provider.max_input_tokens:
+        raise ChatError(_overflow_message(text, has_photo))
+
+
 def start_turn(
     member: Any,
     *,
@@ -106,13 +178,15 @@ def start_turn(
         Ход и признак, что он создан этим вызовом; при повторе `created` ложно.
 
     Raises:
-        ChatError: нет ни текста, ни фото либо текст длиннее лимита.
+        ChatError: нет ни текста, ни фото, текст длиннее лимита символов или
+            сообщение с фото не помещается в лимит провайдера.
     """
     clean = text.strip()
     if not clean and photo is None:
         raise ChatError("Введите сообщение или приложите фото")
     if len(clean) > settings.ASSISTANT_MESSAGE_MAX_CHARS:
         raise ChatError(f"Сообщение длиннее {settings.ASSISTANT_MESSAGE_MAX_CHARS} символов")
+    ensure_message_fits(clean, has_photo=photo is not None)
     key = _dedupe_key(clean, photo)
     conversation = Conversation.for_member(member)
     existing = _active_turn(conversation, key)
@@ -168,8 +242,8 @@ def _active_turn(conversation: Conversation, key: str) -> Turn | None:
     ).first()
 
 
-def _history(conversation: Conversation, turn: Turn) -> list[dict[str, Any]]:
-    """Последние удачные сообщения в пределах лимитов; неудачные ходы в историю не идут."""
+def _history(conversation: Conversation, turn: Turn, *, max_tokens: int) -> list[dict[str, Any]]:
+    """Новые сообщения, которые помещаются в лимит токенов; неудачные ходы в историю не идут."""
     messages = list(
         Message.objects.filter(
             conversation=conversation,
@@ -178,15 +252,17 @@ def _history(conversation: Conversation, turn: Turn) -> list[dict[str, Any]]:
         .exclude(turn_id=turn.pk)
         .order_by("-created_at", "-pk")[: settings.ASSISTANT_HISTORY_MESSAGES]
     )
-    budget = settings.ASSISTANT_HISTORY_CHARS
+    budget = max_tokens
     selected: list[dict[str, Any]] = []
     for message in messages:
         if not message.text:
             continue
-        if len(message.text) > budget:
+        candidate = {"role": message.role, "content": message.text}
+        cost = message_tokens(candidate)
+        if cost > budget:
             break
-        budget -= len(message.text)
-        selected.append({"role": message.role, "content": message.text})
+        budget -= cost
+        selected.append(candidate)
     selected.reverse()
     return selected
 
@@ -212,13 +288,30 @@ def _user_content(message: Message) -> Any:
 
 
 def build_prompt(turn: Turn) -> list[dict[str, Any]]:
-    """Собирает запрос модели: системная роль, ограниченная история и текущий ход."""
+    """Собирает запрос под фактический лимит провайдера.
+
+    Сначала резервируются системная роль, схемы инструментов, запас на результаты
+    инструментов и текущее сообщение с фото, затем история добирается от новых к
+    старым, пока помещается.
+    """
     message = turn.messages.filter(role=Message.Role.USER).first()
     if message is None:
         raise ChatError("У хода нет сообщения человека")
-    prompt: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
-    prompt.extend(_history(turn.conversation, turn))
-    prompt.append({"role": "user", "content": _user_content(message)})
+    provider = LLMSettings.current()
+    content = _user_content(message)
+    has_photo = message.has_image and bool(message.photo)
+    system = system_prompt()
+    fixed = (
+        message_tokens({"role": "system", "content": system})
+        + tools_tokens(TOOLS)
+        + message_tokens({"role": "user", "content": content})
+    )
+    if provider.is_configured and fixed > provider.max_input_tokens:
+        raise ChatError(_overflow_message(message.text, has_photo))
+    history_budget = max(0, provider.max_input_tokens - fixed - TOOL_CONTEXT_RESERVE_TOKENS)
+    prompt: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    prompt.extend(_history(turn.conversation, turn, max_tokens=history_budget))
+    prompt.append({"role": "user", "content": content})
     return prompt
 
 
@@ -240,10 +333,12 @@ def _add_cost(turn: Turn, cost: Decimal) -> None:
 def _run_agent(turn: Turn) -> str:
     """Ограниченный цикл «модель → инструменты → модель»; каждый вызов учитывается бюджетом."""
     member = turn.conversation.member
+    provider = LLMSettings.current()
     prompt = build_prompt(turn)
     rounds = 0
     tool_calls = 0
     while True:
+        fit_tool_results(prompt, provider.max_input_tokens, tools=TOOLS)
         result = complete(prompt, tools=TOOLS)
         _add_cost(turn, result.cost_rub)
         if result.tool_calls:
@@ -267,7 +362,7 @@ def _run_agent(turn: Turn) -> str:
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": json.dumps(output, ensure_ascii=False),
+                        "content": tool_result_content(output),
                     }
                 )
             continue

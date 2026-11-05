@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -16,6 +17,12 @@ from assistant.budget import (
     settle,
 )
 from assistant.models import BudgetReservation, LLMSettings, UsageRecord
+from assistant.prompt_budget import (
+    estimated_input_tokens,
+    fit_tool_results,
+    text_tokens,
+    truncate_text,
+)
 
 User = get_user_model()
 
@@ -377,3 +384,60 @@ class ReservationTests(TestCase):
 
         with self.assertRaisesMessage(BudgetUnavailable, "не настроен"):
             reserve(self.config, request_id="req-1")
+
+
+class PromptBudgetTests(TestCase):
+    """Оценка токенов консервативна, а результаты инструментов не выходят за лимит."""
+
+    def test_russian_text_is_estimated_by_utf8_bytes(self):
+        self.assertEqual(text_tokens("привет"), 12)
+
+    def test_truncation_does_not_break_a_multibyte_character(self):
+        self.assertEqual(truncate_text("привет", 5), "пр")
+
+    def test_fit_shortens_older_tool_results_first(self):
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": "с" * 100},
+            {"role": "user", "content": "у" * 100},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read_diary", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call-1", "content": "т" * 2000},
+            {"role": "tool", "tool_call_id": "call-2", "content": "н" * 2000},
+        ]
+
+        fit_tool_results(messages, 1000)
+
+        self.assertLessEqual(estimated_input_tokens(messages), 1000)
+        self.assertLess(text_tokens(messages[-2]["content"]), text_tokens(messages[-1]["content"]))
+
+    def test_fit_drops_a_tool_exchange_when_even_empty_results_do_not_fit(self):
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": "с" * 100},
+            {"role": "user", "content": "у" * 100},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read_diary", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": "call-1", "content": "т" * 2000},
+        ]
+
+        fit_tool_results(messages, 440)
+
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertLessEqual(estimated_input_tokens(messages), 440)
