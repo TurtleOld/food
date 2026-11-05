@@ -855,7 +855,7 @@ class PromptBudgetTest(ChatTestCase):
         configure_llm()
         # Системная роль с датой забрала часть лимита: история короче, но обе
         # новые реплики последнего хода ещё помещаются.
-        self.seed_history(12, size=180)
+        self.seed_history(12, size=150)
 
         self.send("Что на фото?", photo())
         turn = Turn.objects.latest("pk")
