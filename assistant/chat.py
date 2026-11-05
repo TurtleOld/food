@@ -17,7 +17,7 @@ from typing import Any
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import F, Prefetch, Q
+from django.db.models import F, Prefetch, Q, QuerySet
 from django.utils import timezone
 
 from assistant.budget import BudgetUnavailable
@@ -107,6 +107,19 @@ class TurnCard:
     user: Message | None
     answer: Message | None
     elapsed: int | None = None
+
+
+@dataclass(frozen=True)
+class TurnPage:
+    """Окно ленты: карточки по возрастанию времени, курсор его начала и наличие ранних.
+
+    Курсор — самый ранний показанный ход; опрос ленты передаёт его обратно, чтобы
+    ответ не сбросил уже подгруженную историю на первую порцию.
+    """
+
+    cards: list[TurnCard]
+    oldest: Turn | None
+    has_earlier: bool
 
 
 def _dedupe_key(text: str, photo: PreparedPhoto | None) -> str:
@@ -521,15 +534,71 @@ def recover_stale_pending_turns(
     return turn_ids
 
 
-def turn_cards(conversation: Conversation) -> list[TurnCard]:
-    """Последние ходы ленты по возрастанию времени, с их сообщениями."""
-    turns = list(
-        Turn.objects.filter(conversation=conversation, replacement__isnull=True)
+def _visible_turns(conversation: Conversation) -> QuerySet[Turn]:
+    """Ходы ленты, кроме заменённых повтором: каждый поступок человека виден один раз."""
+    return Turn.objects.filter(conversation=conversation, replacement__isnull=True)
+
+
+def _older_than(turns: QuerySet[Turn], cursor: tuple[datetime.datetime, int]) -> QuerySet[Turn]:
+    """Ходы старше курсора `(created_at, pk)`; pk разводит совпадающее время."""
+    created_at, pk = cursor
+    return turns.filter(Q(created_at__lt=created_at) | Q(created_at=created_at, pk__lt=pk))
+
+
+def _at_or_after(turns: QuerySet[Turn], cursor: tuple[datetime.datetime, int]) -> QuerySet[Turn]:
+    """Ходы от курсора включительно и новее: показанное окно и всё, что после него."""
+    created_at, pk = cursor
+    return turns.filter(Q(created_at__gt=created_at) | Q(created_at=created_at, pk__gte=pk))
+
+
+def _newest(turns: QuerySet[Turn], count: int | None = None) -> list[Turn]:
+    """Ходы по убыванию времени; без `count` — всё окно, иначе его последняя порция."""
+    ordered = turns.order_by("-created_at", "-pk").prefetch_related(
         # Байты фото нужны только воркеру; лента проверяет лишь `has_image`.
-        .prefetch_related(Prefetch("messages", queryset=Message.objects.defer("photo")))
-        .order_by("-created_at", "-pk")[: settings.ASSISTANT_FEED_TURNS]
+        Prefetch("messages", queryset=Message.objects.defer("photo"))
     )
-    turns.reverse()
+    return list(ordered[:count] if count is not None else ordered)
+
+
+def turn_page(
+    conversation: Conversation,
+    *,
+    since: tuple[datetime.datetime, int] | None = None,
+    load_older: bool = False,
+) -> TurnPage:
+    """Собирает окно ленты и, если просят, продолжает его вверх более ранними ходами.
+
+    Args:
+        conversation: Лента, к которой относится окно.
+        since: Начало уже показанного окна — пара «время, pk» самого раннего хода;
+            без него отдаётся первая порция последних ходов.
+        load_older: Продолжить окно вверх порцией ходов старше `since`.
+
+    Returns:
+        Карточки окна по возрастанию времени, его самый ранний ход и признак,
+        что за ним в БД есть ещё более ранние ходы.
+    """
+    turns = _visible_turns(conversation)
+    if since is None:
+        window = _newest(turns, settings.ASSISTANT_FEED_TURNS)
+    else:
+        if load_older:
+            earlier = list(
+                _older_than(turns, since)
+                .order_by("-created_at", "-pk")
+                .values_list("created_at", "pk")[: settings.ASSISTANT_FEED_TURNS]
+            )
+            if earlier:
+                since = earlier[-1]
+        window = _newest(_at_or_after(turns, since))
+    window.reverse()
+    oldest = window[0] if window else None
+    has_earlier = oldest is not None and _older_than(turns, (oldest.created_at, oldest.pk)).exists()
+    return TurnPage(cards=_cards(window), oldest=oldest, has_earlier=has_earlier)
+
+
+def _cards(turns: list[Turn]) -> list[TurnCard]:
+    """Карточки в порядке ходов; ожидающему ходу считается прожитое время."""
     cards = []
     now = timezone.now()
     for turn in turns:
