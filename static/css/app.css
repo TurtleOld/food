@@ -558,6 +558,13 @@ body {
   top: 0.95rem;
 }
 
+/* Empty meals are headings too, so heading navigation lists all five; keep the
+   link looking like the row it was before. */
+.meal-row.is-empty > h2 {
+  margin: 0;
+  font: inherit;
+}
+
 .entry {
   display: flex;
   gap: 1rem;
