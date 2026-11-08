@@ -55,6 +55,20 @@ document.addEventListener("alpine:init", () => {
         .catch(() => {});
     },
 
+    _focusWhenVisible(selector, attempt = 0) {
+      // Шторка появляется и меняет тело в микрозадачах Alpine: фокус ставим
+      // только когда элемент уже видим, иначе браузер молча игнорирует focus().
+      if (!this.sheetOpen) return;
+      const element = document.querySelector(selector);
+      if (element && element.getClientRects().length > 0) {
+        element.focus();
+        return;
+      }
+      if (attempt < 20) {
+        requestAnimationFrame(() => this._focusWhenVisible(selector, attempt + 1));
+      }
+    },
+
     _isSheetTarget(event) {
       return Boolean(event.detail.target) && event.detail.target.id === "sheet-body";
     },
@@ -102,20 +116,11 @@ document.addEventListener("alpine:init", () => {
       this.loading = false;
       this.error = failed;
       if (failed) {
-        this.$nextTick(() =>
-          requestAnimationFrame(() => {
-            if (this.sheetOpen) this.$refs.sheetRetry?.focus();
-          }),
-        );
+        requestAnimationFrame(() => this._focusWhenVisible("#sheet-error button"));
       } else {
         this.dirty = false;
         // Пока шёл запрос, тело было скрыто, и htmx не смог сфокусировать autofocus.
-        this.$nextTick(() =>
-          requestAnimationFrame(() => {
-            if (!this.sheetOpen) return;
-            this.$refs.sheetBody?.querySelector("[autofocus]")?.focus();
-          }),
-        );
+        requestAnimationFrame(() => this._focusWhenVisible("#sheet-body [autofocus]"));
       }
     },
   }));
