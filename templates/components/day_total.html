@@ -1,3 +1,4 @@
 {% load nutrition %}
-Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
-<span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>
+{% comment %}day_total: totals; units — неразрывные число+единица для мобильной краткой строки.{% endcomment %}
+Итого за день: <b class="num">{{ totals.calories|whole }}{% if units %}&nbsp;ккал{% else %} ккал{% endif %}</b>
+<span class="muted num">· Б {{ totals.proteins|one_decimal }}{% if units %}&nbsp;г{% endif %} · Ж {{ totals.fats|one_decimal }}{% if units %}&nbsp;г{% endif %} · У {{ totals.carbs|one_decimal }}{% if units %}&nbsp;г{% endif %}</span>

@@ -98,6 +98,8 @@ class DayPageLanguageDTest(TestCase):
         for response in (without_target, with_target):
             self.assertContains(response, "Итого за день:")
             self.assertContains(response, "330 ккал</b>")
+        self.assertContains(with_target, "330&nbsp;ккал")
+        self.assertContains(with_target, "&nbsp;г", count=3)
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
