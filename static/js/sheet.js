@@ -16,6 +16,13 @@ document.addEventListener("alpine:init", () => {
       document.body.addEventListener("htmx:beforeRequest", (event) => this._startRequest(event));
       document.body.addEventListener("htmx:beforeSwap", (event) => this._dropStaleSwap(event));
       document.body.addEventListener("htmx:afterRequest", (event) => this._finishRequest(event));
+      // Ошибку шторки человек читает в самой шторке; общий тост о ней молчит.
+      // Событие помечаем на body: слушатель тоста стоит на window и сработает позже.
+      const markSheetError = (event) => {
+        if (event.detail.target?.id === "sheet-body") event.detail.sheetHandled = true;
+      };
+      document.body.addEventListener("htmx:response-error", markSheetError);
+      document.body.addEventListener("htmx:send-error", markSheetError);
     },
 
     openSheet() {
@@ -95,16 +102,20 @@ document.addEventListener("alpine:init", () => {
       this.loading = false;
       this.error = failed;
       if (failed) {
-        this.$nextTick(() => {
-          if (this.sheetOpen) this.$refs.sheetRetry?.focus();
-        });
+        this.$nextTick(() =>
+          requestAnimationFrame(() => {
+            if (this.sheetOpen) this.$refs.sheetRetry?.focus();
+          }),
+        );
       } else {
         this.dirty = false;
         // Пока шёл запрос, тело было скрыто, и htmx не смог сфокусировать autofocus.
-        this.$nextTick(() => {
-          if (!this.sheetOpen) return;
-          this.$refs.sheetBody?.querySelector("[autofocus]")?.focus();
-        });
+        this.$nextTick(() =>
+          requestAnimationFrame(() => {
+            if (!this.sheetOpen) return;
+            this.$refs.sheetBody?.querySelector("[autofocus]")?.focus();
+          }),
+        );
       }
     },
   }));
