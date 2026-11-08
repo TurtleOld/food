@@ -647,11 +647,27 @@ body {
   gap: 1rem;
 }
 
-/* The phone opens on the day, the add action and the day's glances, so the
-   detailed ring can give up height without losing any number. */
+/* The phone opens on the day, the add action and the day's total, so the
+   detailed ring gives up height and the total moves above it without losing
+   any number. */
 @media (max-width: 1023px) {
+  .quick-add {
+    margin-bottom: 1rem;
+  }
+
+  .summary {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .summary .day-total {
+    order: -1;
+    font-size: 0.9rem;
+  }
+
   .summary > .ring {
-    --ring-size: 10rem;
+    width: 10rem;
+    height: 10rem;
   }
 
   .summary .macros {
