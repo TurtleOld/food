@@ -2,5 +2,15 @@
 <div class="sheet-backdrop" x-show="sheetOpen" x-cloak @click="closeSheet()"></div>
 <aside class="sheet" x-show="sheetOpen" x-cloak role="dialog" aria-modal="true" aria-label="{{ label }}">
   <button type="button" class="btn-quiet sheet-close" @click="closeSheet()" aria-label="Закрыть">{% include "components/icons/x.html" %}</button>
-  <div id="sheet-body" @input="if ($event.target.closest('[data-guard]')) dirty = true"></div>
+  <div id="sheet-loading" class="sheet-state" x-show="loading" x-cloak role="status">
+    <span class="sheet-spinner" aria-hidden="true"></span>
+    <p class="muted mb-0">Загружаем форму…</p>
+  </div>
+  <div id="sheet-error" class="sheet-state sheet-state-error" x-show="error" x-cloak role="alert">
+    <p class="sheet-state-title">Форма не загрузилась</p>
+    <p class="muted mb-0">Проверьте подключение и попробуйте ещё раз. Введённое сохранится.</p>
+    <button type="button" class="button is-primary is-small" @click="retry()" x-ref="sheetRetry">Попробовать снова</button>
+  </div>
+  <div id="sheet-body" x-show="!loading" x-ref="sheetBody" :aria-busy="loading ? 'true' : 'false'" aria-busy="false"
+       @input="if ($event.target.closest('[data-guard]')) dirty = true"></div>
 </aside>
