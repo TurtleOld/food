@@ -36,3 +36,11 @@ class SheetWaitingStateTests(TestCase):
                 self.assertContains(response, 'role="alert"')
                 self.assertContains(response, "Форма не загрузилась")
                 self.assertContains(response, "Попробовать снова")
+
+    def test_sheet_says_the_result_is_unknown_after_a_failed_change(self):
+        for name, url in self.sheet_pages().items():
+            with self.subTest(page=name):
+                response = self.client.get(url)
+
+                self.assertContains(response, "Результат неясен")
+                self.assertContains(response, "Проверьте, применилось ли изменение")

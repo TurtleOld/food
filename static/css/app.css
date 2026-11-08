@@ -799,6 +799,12 @@ body:has(.login) {
   margin-top: 0.35rem;
 }
 
+/* Фокус на панели — только чтобы скринридер прочитал «Результат неясен»;
+   панель не интерактивна. */
+.sheet-state-error:focus {
+  outline: none;
+}
+
 @media (min-width: 1024px) {
   .sheet {
     inset: 50% auto auto 50%;

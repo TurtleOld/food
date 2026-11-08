@@ -5,6 +5,7 @@ document.addEventListener("alpine:init", () => {
     sheetOpen: false,
     loading: false,
     error: false,
+    retryable: false,
     dirty: false,
     _request: 0,
     _pending: null,
@@ -28,6 +29,7 @@ document.addEventListener("alpine:init", () => {
     openSheet() {
       this.sheetOpen = true;
       this.error = false;
+      this.retryable = false;
       this.dirty = false;
     },
 
@@ -35,6 +37,7 @@ document.addEventListener("alpine:init", () => {
       if (!force && this.dirty && !confirm("Закрыть без сохранения?")) return;
       this.sheetOpen = false;
       this.error = false;
+      this.retryable = false;
       this.dirty = false;
     },
 
@@ -90,15 +93,18 @@ document.addEventListener("alpine:init", () => {
       }
       event.detail.xhr.__sheetRequest = this._request;
       this._pending = event.detail.elt;
-      this._retry = {
-        verb: event.detail.requestConfig.verb,
-        path: event.detail.requestConfig.path,
-        values: event.detail.requestConfig.parameters,
-        elt: event.detail.elt,
-      };
+      // Повторяем только загрузку формы (GET). Повтор POST после потерянного
+      // ответа может создать второй Продукт, снова привязать код или иначе
+      // повторить изменение, поэтому для неидемпотентных действий повтора нет.
+      const config = event.detail.requestConfig;
+      this._retry =
+        config.verb === "get"
+          ? { verb: config.verb, path: config.path, values: config.parameters, elt: event.detail.elt }
+          : null;
       this.sheetOpen = true;
       this.loading = true;
       this.error = false;
+      this.retryable = false;
     },
 
     _dropStaleSwap(event) {
@@ -115,8 +121,13 @@ document.addEventListener("alpine:init", () => {
       const failed = Boolean(event.detail.failed || event.detail.error);
       this.loading = false;
       this.error = failed;
+      this.retryable = failed && Boolean(this._retry);
       if (failed) {
-        requestAnimationFrame(() => this._focusWhenVisible("#sheet-error button"));
+        // Для POST результат изменения неизвестен: повтор не предлагаем,
+        // фокусируем сообщение, чтобы его прочитали, а форма осталась с вводом.
+        requestAnimationFrame(() =>
+          this._focusWhenVisible(this.retryable ? "#sheet-error button" : "#sheet-error"),
+        );
       } else {
         this.dirty = false;
         // Пока шёл запрос, тело было скрыто, и htmx не смог сфокусировать autofocus.
