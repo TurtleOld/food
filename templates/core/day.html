@@ -29,6 +29,10 @@
 
     <div class="summary-col">
       <div class="box summary has-text-centered">
+        <p class="day-glance">
+          Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
+          <span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>
+        </p>
         {% if rings %}
           {% with kcal=rings.0 %}
             {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}

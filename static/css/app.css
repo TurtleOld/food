@@ -457,6 +457,10 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.day-glance {
+  display: none;
+}
+
 .ring {
   position: relative;
   display: inline-block;
@@ -648,21 +652,21 @@ body {
 }
 
 /* The phone opens on the day, the add action and the day's total, so the
-   detailed ring gives up height and the total moves above it without losing
-   any number. */
+   total is repeated at the top of the summary and the detailed ring gives up
+   height without losing any number. */
 @media (max-width: 1023px) {
   .quick-add {
     margin-bottom: 1rem;
   }
 
-  .summary {
-    display: flex;
-    flex-direction: column;
+  .day-glance {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
   }
 
   .summary .day-total {
-    order: -1;
-    font-size: 0.9rem;
+    display: none;
   }
 
   .summary > .ring {
