@@ -263,7 +263,10 @@ body {
 .topbar-link:focus-visible,
 .profile-chip:focus-visible,
 .logout-button:focus-visible,
-.tabbar a:focus-visible {
+.tabbar a:focus-visible,
+.date-step:focus-visible,
+.date-pick:focus-visible,
+.date-copy:focus-visible {
   outline: 2px solid var(--kcal);
   outline-offset: 2px;
 }
@@ -425,24 +428,95 @@ body {
   display: block;
 }
 
+/* The title owns the first row between the arrows, and the date actions own
+   the full-width second row: at 200% text zoom the centre column would
+   otherwise squeeze the title to one letter per line. The 44px targets stay
+   in CSS pixels, so text zoom does not widen the arrows past their hit area. */
 .datebar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "prev title next"
+    "actions actions actions";
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 1.5rem;
 }
 
 .datebar .day {
-  text-align: center;
+  display: contents;
 }
 
-.datebar .date-pick {
+.datebar .day > .title {
+  grid-area: title;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.date-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.date-step {
+  grid-area: prev;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: var(--bulma-text);
+  font-size: 1.35rem;
+}
+
+.date-step:hover,
+.date-pick:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+}
+
+.date-step-next {
+  grid-area: next;
+}
+
+.date-step-next .icon {
+  transform: rotate(180deg);
+}
+
+.date-pick,
+.date-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--bulma-text);
+  font: inherit;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.date-pick {
   border: 0;
   background: none;
-  color: var(--bulma-text-weak);
-  font: inherit;
-  font-size: 0.85rem;
   cursor: pointer;
+}
+
+/* The copy action gets an outline so it does not read as the date value. */
+.date-copy {
+  box-shadow: inset 0 0 0 1px var(--bulma-border-weak);
+  font-size: 0.9rem;
+}
+
+.date-copy:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
 }
 
 .datebar .date-native {
