@@ -70,7 +70,7 @@
                      hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true">
                     <span>
                       <span class="entry-name">{{ entry.product.name }}</span>
-                      <span class="entry-detail is-size-7 muted">{{ entry.amount }} {{ entry.product.get_base_unit_display }} · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
+                      <span class="entry-detail is-size-7 muted"><span class="nowrap">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
                     </span>
                     <span class="entry-kcal num">{{ entry.calories|whole }} <small class="muted">ккал</small></span>
                   </a>

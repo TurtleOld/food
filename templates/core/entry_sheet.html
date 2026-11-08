@@ -73,7 +73,7 @@
         <a class="result" href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=item.product.pk meal=meal hour=hour %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=item.product.pk meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ item.product.name }}</span>
-          <span class="entry-detail is-size-7 muted num">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted num"><span class="nowrap">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span></span>
         </a>
       {% endif %}
     {% endfor %}
