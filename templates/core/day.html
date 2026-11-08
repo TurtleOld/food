@@ -32,7 +32,7 @@
               <div class="item">
                 {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
                 {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
-                <span class="is-size-7 muted">{{ ring.label }} · {{ ring.goal|whole }} г</span>
+                <span class="is-size-7 muted unit-pair">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
               </div>
             {% endfor %}
           </div>
@@ -40,11 +40,12 @@
         {% else %}
           <p class="muted">Цель не задана</p>
           <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+          <p class="day-total mt-4 mb-0">
+            Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
+            <span class="muted num">· <span class="unit-pair">Б {{ totals.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ totals.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ totals.carbs|one_decimal }} г</span></span>
+          </p>
         {% endif %}
-        <p class="day-total mt-4 mb-0">
-          Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
-          <span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>
-        </p>
+        <p class="muted is-size-7 mt-3">Ккал округлены до целых, БЖУ — до 0,1 г.</p>
       </div>
     </div>
 
@@ -63,14 +64,14 @@
               <div class="box">
                 <div class="level is-mobile mb-1">
                   <h2 class="title is-5 mb-0">{{ row.label }}</h2>
-                  <span class="muted num">{{ row.calories|whole }} ккал</span>
+                  <span class="muted num unit-pair">{{ row.calories|whole }} ккал</span>
                 </div>
                 {% for entry in row.entries %}
                   <a class="entry" href="{% url 'core:entry_edit' entry.pk %}"
                      hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true">
                     <span>
                       <span class="entry-name">{{ entry.product.name }}</span>
-                      <span class="entry-detail is-size-7 muted">{{ entry.amount }} {{ entry.product.get_base_unit_display }} · Б {{ entry.proteins|one_decimal }} · Ж {{ entry.fats|one_decimal }} · У {{ entry.carbs|one_decimal }}</span>
+                      <span class="entry-detail is-size-7 muted num"><span class="unit-pair">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> · <span class="unit-pair">Б {{ entry.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ entry.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ entry.carbs|one_decimal }} г</span></span>
                     </span>
                     <span class="entry-kcal num">{{ entry.calories|whole }} <small class="muted">ккал</small></span>
                   </a>
