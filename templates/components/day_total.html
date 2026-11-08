@@ -1,0 +1,3 @@
+{% load nutrition %}
+Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
+<span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>

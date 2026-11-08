@@ -111,6 +111,7 @@ class DayPageLanguageDTest(TestCase):
         self.assertNotContains(response, reverse("core:entry_delete", args=[entry.pk]))
 
     def test_primary_add_action_leads_to_add_page_before_the_summary(self):
+        self._target()
         response = self.client.get(reverse("core:day"))
 
         content = response.content.decode()
@@ -119,7 +120,9 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, f'href="{add_url}"')
         self.assertContains(response, f'href="{add_url}?scan=1"')
         self.assertContains(response, 'aria-label="Сканер штрихкода"')
+        self.assertContains(response, '@click="openSheet($event)"', count=2)
         self.assertLess(content.index("Добавить запись"), content.index("Итого за день:"))
+        self.assertLess(content.index("Итого за день:"), content.index('class="ring"'))
 
     def test_rings_show_kcal_of_target_and_macro_goals_in_order(self):
         self._target()
