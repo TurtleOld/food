@@ -85,7 +85,7 @@
             {% else %}
               <h2>
                 <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
-                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"><span class="has-text-weight-medium">{{ row.label }}</span> <span class="muted">· добавить</span></a>
+                   hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)"><span class="has-text-weight-medium">{{ row.label }}</span> <span class="muted">· добавить</span></a>
               </h2>
             {% endif %}
           </div>
