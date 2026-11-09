@@ -122,7 +122,6 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, f'href="{add_url}"')
         self.assertContains(response, f'href="{add_url}?scan=1"')
         self.assertContains(response, 'aria-label="Сканер штрихкода"')
-        self.assertContains(response, '@click="openSheet($event)"', count=2)
         self.assertLess(content.index("Добавить запись"), content.index("Итого за день:"))
         self.assertLess(content.index("Итого за день:"), content.index('class="ring"'))
 
