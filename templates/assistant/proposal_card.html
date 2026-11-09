@@ -32,7 +32,7 @@
           {% if proposal.kind == "entry" %}
             <a href="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}"
                {% if in_chat %}hx-get="{% url 'assistant:proposal_edit' proposal.pk %}?product={{ product.pk }}"
-               hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"{% endif %}>{{ product.name }}</a>{% if not forloop.last %}, {% endif %}
+               hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)"{% endif %}>{{ product.name }}</a>{% if not forloop.last %}, {% endif %}
           {% else %}
             {{ product.name }}{% if not forloop.last %}, {% endif %}
           {% endif %}
@@ -45,7 +45,7 @@
     <div class="proposal-actions">
       <a class="btn-quiet proposal-edit" href="{% url 'assistant:proposal_edit' proposal.pk %}"
          {% if in_chat %}hx-get="{% url 'assistant:proposal_edit' proposal.pk %}"
-         hx-target="#sheet-body" hx-swap="innerHTML" @click="sheetOpen = true"{% endif %}>Поправить</a>
+         hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)"{% endif %}>Поправить</a>
       <form class="proposal-confirm-form" method="post" action="{% url 'assistant:proposal_confirm' proposal.pk %}"
             {% if in_chat %}hx-post="{% url 'assistant:proposal_confirm' proposal.pk %}"
             hx-target="#feed" hx-swap="outerHTML" hx-disabled-elt="find button[type='submit']"{% endif %}>

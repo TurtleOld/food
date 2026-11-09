@@ -690,9 +690,12 @@ body {
     grid-column: 1;
   }
 
+  /* The summary column spans the feed's height, so the sticky card can follow
+     the scroll instead of leaving its grid row. */
   .summary-col {
     grid-column: 1;
     grid-row: 2;
+    align-self: stretch;
   }
 
   .summary {
@@ -702,7 +705,7 @@ body {
 
   .feed-col {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 2;
   }
 }
 
