@@ -19,6 +19,7 @@
 
 ## Conventions
 
+- In PRs, issues, comments, documentation and published artifacts (including logs and screenshots), reference files only by repository-relative paths. Never publish absolute local filesystem paths or machine-specific directory names. Before publishing, inspect the text and attachments; replace local paths with repository-relative paths, or redact paths outside the repository.
 - Django views are class-based (CBV, prefer Django generic views); do not add function-based views.
 - Views stay thin: domain logic lives in plain functions in domain modules (e.g. `day_summary` in `core/diary.py`), so it is unit-testable without HTTP.
 - Name code after the `CONTEXT.md` glossary: one English identifier per term (Продукт → `Product`, Запись дневника → `DiaryEntry`, Штрихкод → `Barcode`), never a synonym from its _Avoid_ list.
