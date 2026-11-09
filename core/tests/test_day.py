@@ -142,7 +142,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertEqual(response.content.decode().count("46,5"), 2)
+        self.assertContains(response, "Б 46,5 г")
         self.assertContains(response, "Ж 5,4 г")
         self.assertContains(response, "У 0,0 г")
         self.assertContains(response, "150,0 г")
