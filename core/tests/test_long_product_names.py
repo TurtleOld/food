@@ -77,7 +77,8 @@ class LongProductNameTest(TestCase):
 
         recent = self.client.get(self.create_url, headers=HTMX)
         self.assertContains(recent, self.long_name)
-        self.assertContains(recent, "250 г")
+        # Количество в «Недавних» печатается с десятой долей или без неё.
+        self.assertRegex(recent.content.decode(), r"250(?:,0)? г")
 
     def test_long_name_is_whole_in_product_search_results(self):
         search_url = reverse("core:entry_search", args=[self.today.isoformat()])
