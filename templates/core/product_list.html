@@ -2,7 +2,7 @@
 {% load nutrition %}
 
 {% block content %}
-  <div class="catalog" x-data="sheetHost" @keydown.escape.window="closeSheet()" @sheet:close.window="closeSheet(true)">
+  <div class="catalog" x-data="sheetHost" @keydown.escape.window="closeSheet()" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
     <h1 class="title is-3 mb-4">Продукты</h1>
 
     <form class="findbar" method="get" action="{% url 'core:product_list' %}"
@@ -10,7 +10,7 @@
       {% include "components/icons/search.html" %}
       <input type="search" name="q" value="{{ query }}" autocomplete="off" placeholder="Найти продукт" aria-label="Поиск продукта">
       <a class="btn-quiet" href="{% url 'core:product_create' %}"
-         hx-get="{% url 'core:product_create' %}" hx-trigger="click" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">+ Новый</a>
+         hx-get="{% url 'core:product_create' %}" hx-trigger="click" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet($event)">+ Новый</a>
     </form>
 
     {% partialdef catalog inline %}
@@ -21,7 +21,7 @@
         <div class="box">
           {% for product in products %}
             <a class="entry" href="{% url 'core:product_edit' product.pk %}"
-               hx-get="{% url 'core:product_edit' product.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">
+               hx-get="{% url 'core:product_edit' product.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet($event)">
               <span>
                 <span class="entry-name">{{ product.name }}{% if product.barcodes.all %} <span class="muted" title="Есть штрихкод">▦</span>{% endif %}</span>
                 <span class="entry-detail is-size-7 muted num"><span class="unit-pair">Б {{ product.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ product.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ product.carbs|one_decimal }} г</span></span>
@@ -36,7 +36,7 @@
       {% if query and not query.isdigit %}
         <p class="has-text-centered">
           <a class="btn-quiet" href="{% url 'core:product_create' %}?name={{ query|urlencode }}"
-             hx-get="{% url 'core:product_create' %}?name={{ query|urlencode }}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet()">+ Новый продукт «{{ query }}»</a>
+             hx-get="{% url 'core:product_create' %}?name={{ query|urlencode }}" hx-target="#sheet-body" hx-swap="innerHTML" hx-include="unset" @click="openSheet($event)">+ Новый продукт «{{ query }}»</a>
         </p>
       {% endif %}
     </div>
