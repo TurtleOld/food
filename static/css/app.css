@@ -571,9 +571,21 @@ body {
   border-top: 1px solid var(--bulma-border-weak);
 }
 
+/* 200-character names without spaces wrap inside their row instead of
+   widening the page; the row's leading text may shrink for the numbers. */
+.entry > span:first-child,
+.result > span:first-child {
+  min-width: 0;
+}
+
 .entry-name {
   display: block;
   font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .entry-detail {
@@ -936,6 +948,7 @@ body:has(.login) {
 }
 
 .entry-kcal {
+  flex: none;
   white-space: nowrap;
 }
 
