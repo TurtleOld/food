@@ -229,6 +229,17 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
             return HttpResponseClientRedirect(url)
         return redirect(url)
 
+    def _complete(self, request: HttpRequest, target: datetime.date) -> HttpResponse:
+        """Завершает копирование: в открытый день — фрагментом ленты, в другой — переходом.
+
+        Копирование в день, который сейчас открыт, не должно перезагружать страницу:
+        лента обновляется на месте, как после добавления Записи.
+        """
+        if self.request.htmx and target == self.page_date:  # type: ignore[attr-defined]
+            context = _day_context(request.user, target)
+            return sheet_saved_response(request, "core/day.html#feed", context, "#feed")
+        return self._redirect(target)
+
     def get(self, request: HttpRequest, date: str) -> HttpResponse:
         scope, meal, entry = self._scope(request.GET, strict=True)
         form = DiaryCopyForm(
@@ -280,11 +291,11 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
             return self._render(form, scope, entry, meal)
         if duplicate:
             messages.info(request, "Это копирование уже выполнено")
-            return self._redirect(target)
+            return self._complete(request, target)
         add_undo_message(
             request, f"Скопировано записей: {len(entries)}", copy_token(entries, target)
         )
-        return self._redirect(target)
+        return self._complete(request, target)
 
 
 class OwnEntryMixin(HtmxLoginRequiredMixin):
