@@ -100,6 +100,8 @@ class DayPageLanguageDTest(TestCase):
         for response in (without_target, with_target):
             self.assertContains(response, "Итого за день:")
             self.assertContains(response, "330 ккал</b>")
+        self.assertContains(with_target, "330&nbsp;ккал")
+        self.assertContains(with_target, "&nbsp;г", count=3)
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
@@ -112,13 +114,18 @@ class DayPageLanguageDTest(TestCase):
         self.assertNotContains(response, "✎")
         self.assertNotContains(response, reverse("core:entry_delete", args=[entry.pk]))
 
-    def test_what_did_you_eat_row_links_to_add_page(self):
+    def test_primary_add_action_leads_to_add_page_before_the_summary(self):
+        self._target()
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Что съели?")
-        self.assertContains(
-            response, f'href="{reverse("core:entry_create", args=[self.today.isoformat()])}"'
-        )
+        content = response.content.decode()
+        add_url = reverse("core:entry_create", args=[self.today.isoformat()])
+        self.assertContains(response, "Добавить запись")
+        self.assertContains(response, f'href="{add_url}"')
+        self.assertContains(response, f'href="{add_url}?scan=1"')
+        self.assertContains(response, 'aria-label="Сканер штрихкода"')
+        self.assertLess(content.index("Добавить запись"), content.index("Итого за день:"))
+        self.assertLess(content.index("Итого за день:"), content.index('class="ring"'))
 
     def test_rings_show_kcal_of_target_and_macro_goals_in_order(self):
         self._target()

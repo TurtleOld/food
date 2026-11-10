@@ -21,8 +21,18 @@
     </div>
   {% partialdef feed inline %}
   <div id="feed" class="feed-block">
+    <div class="quick-add">
+      <a class="btn-main quick-add-action" href="{% url 'core:entry_create' current_date.isoformat %}"
+         hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">
+        {% include "components/icons/plus.html" %}<span>Добавить запись</span>
+      </a>
+      <a class="quick-add-scan" href="{% url 'core:entry_create' current_date.isoformat %}?scan=1"
+         hx-get="{% url 'core:entry_create' current_date.isoformat %}?scan=1" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)" aria-label="Сканер штрихкода">{% include "components/icons/barcode.html" %}</a>
+    </div>
+
     <div class="summary-col">
       <div class="box summary has-text-centered">
+        <p class="day-glance">{% include "components/day_total.html" with units=True %}</p>
         {% if rings %}
           {% with kcal=rings.0 %}
             {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}
@@ -44,20 +54,11 @@
           <p class="muted">Цель не задана</p>
           <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
         {% endif %}
-        <p class="day-total mt-4 mb-0">
-          Итого за день: <b class="num">{{ totals.calories|whole }} ккал</b>
-          <span class="muted num">· Б {{ totals.proteins|one_decimal }} · Ж {{ totals.fats|one_decimal }} · У {{ totals.carbs|one_decimal }}</span>
-        </p>
+        <p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>
       </div>
     </div>
 
     <div class="feed-col">
-      <div class="quick-add">
-        <a class="quick-add-prompt" href="{% url 'core:entry_create' current_date.isoformat %}"
-           hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Что съели?</a>
-        <a class="btn-quiet" href="{% url 'core:entry_create' current_date.isoformat %}?scan=1"
-           hx-get="{% url 'core:entry_create' current_date.isoformat %}?scan=1" hx-vals="js:{hour: new Date().getHours()}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)" aria-label="Сканер штрихкода">{% include "components/icons/barcode.html" %}</a>
-      </div>
       <div class="timeline">
         {% for row in meal_rows %}
           <div class="meal-row{% if not row.entries %} is-empty{% endif %}">

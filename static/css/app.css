@@ -531,12 +531,20 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.day-glance {
+  display: none;
+}
+
 .ring {
   position: relative;
   display: inline-block;
+  width: var(--ring-size);
+  height: var(--ring-size);
 }
 
 .ring svg {
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
@@ -581,18 +589,61 @@ body {
 
 .quick-add {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
-.quick-add-prompt {
+.btn-main.quick-add-action {
   flex: 1;
-  padding: 0.8rem 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: auto;
+  min-height: 3rem;
+  border-radius: 999px;
+  text-align: center;
+  box-shadow: var(--soft-shadow);
+}
+
+.quick-add-action .icon {
+  flex: none;
+  font-size: 1.35rem;
+}
+
+.quick-add-action:hover {
+  filter: brightness(1.04);
+}
+
+.quick-add-action:active {
+  transform: scale(0.99);
+}
+
+.quick-add-scan {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  min-height: 3rem;
   border-radius: 999px;
   background: var(--bulma-scheme-main);
-  box-shadow: var(--soft-shadow);
   color: var(--bulma-text-weak);
+  box-shadow: var(--soft-shadow);
+}
+
+.quick-add-scan .icon {
+  font-size: 1.45rem;
+}
+
+.quick-add-scan:hover {
+  color: var(--bulma-text-strong);
+}
+
+.quick-add-scan:focus-visible,
+.quick-add-action:focus-visible {
+  outline: 2px solid var(--bulma-text-strong);
+  outline-offset: 2px;
 }
 
 .timeline {
@@ -693,6 +744,34 @@ body {
   gap: 1rem;
 }
 
+/* The phone opens on the day, the add action and the day's total, so the
+   total is repeated at the top of the summary and the detailed ring gives up
+   height without losing any number. */
+@media (max-width: 1023px) {
+  .quick-add {
+    margin-bottom: 1rem;
+  }
+
+  .day-glance {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .summary .day-total {
+    display: none;
+  }
+
+  .summary > .ring {
+    width: 10rem;
+    height: 10rem;
+  }
+
+  .summary .macros {
+    margin-top: 1rem;
+  }
+}
+
 @media (min-width: 1024px) {
   .feed-block {
     display: contents;
@@ -707,6 +786,11 @@ body {
 
   .datebar {
     grid-column: 1;
+  }
+
+  .quick-add {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   /* The summary column spans the feed's height, so the sticky card can follow
