@@ -10,7 +10,7 @@
         <a class="result" data-catalog href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=code_search.product.pk meal=meal hour=hour code=code_search.code %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=code_search.product.pk meal=meal hour=hour code=code_search.code %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ code_search.product.name }} <span class="chip">▦ в каталоге</span></span>
-          <span class="entry-detail is-size-7 muted">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
         </a>
       {% else %}
         {% url 'core:entry_product_new' date.isoformat as new_url %}
@@ -42,13 +42,13 @@
         <button type="button" class="result" hx-post="{% url 'core:entry_barcode_bind' date.isoformat %}"
                 hx-vals="{% hx_vals product=product.pk code=bind meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ product.name }}</span>
-          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
         </button>
       {% else %}
         <a class="result" href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=product.pk meal=meal hour=hour %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=product.pk meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ product.name }}</span>
-          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
         </a>
       {% endif %}
     {% empty %}
