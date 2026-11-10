@@ -1,9 +1,11 @@
 import datetime
+import re
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.formats import date_format
 
 from core.models import DailyTarget, DiaryEntry, Product
 
@@ -174,6 +176,45 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, "10/03/2026")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
+
+    def test_day_page_has_one_main_heading_naming_today_and_its_date(self):
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "<h1", count=1)
+        self.assertRegex(
+            response.content.decode(),
+            r"<h1\b[^>]*>Сегодня<span\b[^>]*>, "
+            f"{re.escape(date_format(self.today, 'j E Y'))}</span></h1>",
+        )
+
+    def test_past_day_main_heading_names_the_weekday_and_date(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertRegex(
+            response.content.decode(),
+            rf"<h1\b[^>]*>{re.escape(date_format(day, 'l'))}<span\b[^>]*>, "
+            f"{re.escape(date_format(day, 'j E Y'))}</span></h1>",
+        )
+
+    def test_every_meal_is_an_h2_heading_on_empty_and_filled_days(self):
+        empty = self.client.get(reverse("core:day"))
+        self._eat()
+        filled = self.client.get(reverse("core:day"))
+
+        for response in (empty, filled):
+            self.assertContains(response, "<h2", count=5)
+
+    def test_date_controls_name_the_action_and_the_day_for_assistive_tech(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, 'aria-label="Изменить дату: 10/03/2026"')
+        self.assertContains(response, 'aria-label="Копировать день"')
+        self.assertContains(response, 'aria-label="Предыдущий день"')
+        self.assertContains(response, 'aria-label="Следующий день"')
 
     def test_feed_and_summary_share_one_block_with_feed_id(self):
         response = self.client.get(reverse("core:day"))
