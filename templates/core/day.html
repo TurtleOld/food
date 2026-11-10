@@ -45,7 +45,7 @@
               <div class="item">
                 {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
                 {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
-                <span class="is-size-7 muted unit-pair">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
+                <span class="is-size-7 muted nowrap">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
               </div>
             {% endfor %}
           </div>
@@ -68,14 +68,14 @@
               <div class="box">
                 <div class="level is-mobile mb-1">
                   <h2 class="title is-5 mb-0">{{ row.label }}</h2>
-                  <span class="muted num unit-pair">{{ row.calories|whole }} ккал</span>
+                  <span class="muted num nowrap">{{ row.calories|whole }} ккал</span>
                 </div>
                 {% for entry in row.entries %}
                   <a class="entry" href="{% url 'core:entry_edit' entry.pk %}"
                      hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">
                     <span>
                       <span class="entry-name">{{ entry.product.name }}</span>
-                      <span class="entry-detail is-size-7 muted num"><span class="unit-pair">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> · <span class="unit-pair">Б {{ entry.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ entry.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ entry.carbs|one_decimal }} г</span></span>
+                      <span class="entry-detail is-size-7 muted num"><span class="nowrap">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> · <span class="nowrap">Б {{ entry.proteins|one_decimal }} г</span> · <span class="nowrap">Ж {{ entry.fats|one_decimal }} г</span> · <span class="nowrap">У {{ entry.carbs|one_decimal }} г</span></span>
                     </span>
                     <span class="entry-kcal num">{{ entry.calories|whole }} <small class="muted">ккал</small></span>
                   </a>

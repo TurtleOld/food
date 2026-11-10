@@ -85,7 +85,7 @@
         {% if target %}
           <p class="muted">
             Текущая цель: <b class="num">{{ target.calories|one_decimal }}</b> ккал ·
-            <span class="unit-pair">Б {{ target.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ target.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ target.carbs|one_decimal }} г</span>
+            <span class="nowrap">Б {{ target.proteins|one_decimal }} г</span> · <span class="nowrap">Ж {{ target.fats|one_decimal }} г</span> · <span class="nowrap">У {{ target.carbs|one_decimal }} г</span>
           </p>
         {% endif %}
 

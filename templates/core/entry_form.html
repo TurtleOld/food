@@ -8,7 +8,7 @@
           {% if request.htmx %}x-data hx-post="{{ request.path }}" hx-target="#form" hx-swap="outerHTML"{% endif %}>
       {% csrf_token %}
       <h2 class="title is-4 mb-1">{{ entry.product.name }}</h2>
-      <p class="muted is-size-7 mb-4">КБЖУ на <span class="unit-pair">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> считается по записи, а не по Каталогу</p>
+      <p class="muted is-size-7 mb-4">КБЖУ на <span class="nowrap">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> считается по записи, а не по Каталогу</p>
 
       {{ form.non_field_errors }}
       <div class="amount">
