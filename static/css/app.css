@@ -632,6 +632,13 @@ body {
   top: 0.95rem;
 }
 
+/* Empty meals are headings too, so heading navigation lists all five; keep the
+   link looking like the row it was before. */
+.meal-row.is-empty > h2 {
+  margin: 0;
+  font: inherit;
+}
+
 .entry {
   display: flex;
   gap: 1rem;
@@ -645,9 +652,21 @@ body {
   border-top: 1px solid var(--bulma-border-weak);
 }
 
+/* 200-character names without spaces wrap inside their row instead of
+   widening the page; the row's leading text may shrink for the numbers. */
+.entry > span:first-child,
+.result > span:first-child {
+  min-width: 0;
+}
+
 .entry-name {
   display: block;
   font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.nowrap {
+  white-space: nowrap;
 }
 
 .entry-detail {
@@ -822,6 +841,66 @@ body:has(.login) {
   right: 0.75rem;
 }
 
+/* Loading a new sheet step hides the previous form, so the drawer keeps its
+   size with a state block instead of old controls that are about to vanish. */
+.sheet-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 12rem;
+  text-align: center;
+}
+
+.sheet-spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid var(--ring-track);
+  border-top-color: var(--kcal);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-spinner {
+    animation: sheet-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes sheet-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.sheet-state-error {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  min-height: 0;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--bulma-danger) 30%, var(--bulma-scheme-main));
+  border-radius: var(--bulma-radius);
+  background: color-mix(in srgb, var(--bulma-danger) 7%, var(--bulma-scheme-main));
+}
+
+.sheet-state-title {
+  margin-bottom: 0;
+  font-weight: 600;
+}
+
+.sheet-state-error .button {
+  margin-top: 0.35rem;
+}
+
+/* Фокус на панели — только чтобы скринридер прочитал «Результат неясен»;
+   панель не интерактивна. */
+.sheet-state-error:focus {
+  outline: none;
+}
+
 @media (min-width: 1024px) {
   .sheet {
     inset: 50% auto auto 50%;
@@ -950,6 +1029,7 @@ body:has(.login) {
 }
 
 .entry-kcal {
+  flex: none;
   white-space: nowrap;
 }
 

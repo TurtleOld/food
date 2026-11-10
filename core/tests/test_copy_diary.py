@@ -257,6 +257,58 @@ class CopyDayTests(CopyBase):
         self.assertFalse(DiaryEntry.objects.filter(member=self.member, date=self.target).exists())
 
 
+class CopyIntoOpenDayTests(CopyBase):
+    """Копирование в открытый день обновляет ленту на месте, без перезагрузки страницы."""
+
+    def open_day_copy_url(self):
+        return reverse("core:diary_copy", args=[self.target.isoformat()])
+
+    def test_copy_into_the_open_day_returns_the_feed_instead_of_a_redirect(self):
+        self.eat(self.member, self.chicken, "120", self.source, DiaryEntry.MealType.BREAKFAST)
+
+        response = self.client.post(
+            self.open_day_copy_url(),
+            self.copy_data(source=self.source, target=self.target),
+            headers=HTMX,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.has_header("HX-Redirect"))
+        self.assertEqual(response["HX-Retarget"], "#feed")
+        self.assertIn("sheet:close", response["HX-Trigger"])
+        self.assertContains(response, 'id="feed"')
+        self.assertContains(response, "Курица")
+        self.assertEqual(DiaryEntry.objects.filter(member=self.member, date=self.target).count(), 1)
+
+    def test_copy_into_another_day_still_navigates_to_that_day(self):
+        self.eat(self.member, self.chicken, "120", self.source, DiaryEntry.MealType.BREAKFAST)
+
+        response = self.client.post(
+            self.copy_url(),
+            self.copy_data(source=self.source, target=self.target),
+            headers=HTMX,
+        )
+
+        self.assertEqual(
+            response["HX-Redirect"], reverse("core:day_on", args=[self.target.isoformat()])
+        )
+
+    def test_duplicate_copy_into_the_open_day_also_updates_in_place(self):
+        self.eat(self.member, self.chicken, "120", self.source, DiaryEntry.MealType.BREAKFAST)
+        operation = secrets.token_urlsafe(8)
+        self.client.post(
+            self.open_day_copy_url(), self.copy_data(operation=operation), headers=HTMX
+        )
+
+        response = self.client.post(
+            self.open_day_copy_url(), self.copy_data(operation=operation), headers=HTMX
+        )
+
+        self.assertFalse(response.has_header("HX-Redirect"))
+        self.assertContains(response, "уже")
+        self.assertContains(response, 'id="feed"')
+
+
 class CopyMealTests(CopyBase):
     def test_only_the_chosen_meal_is_copied(self):
         self.eat(self.member, self.chicken, "100", self.source, DiaryEntry.MealType.BREAKFAST)
