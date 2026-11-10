@@ -53,6 +53,13 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Число и его единица переносятся только вместе — на узком телефоне «7,2» не отрывается от «г». */
+.unit-pair,
+.entry-kcal,
+.macro {
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--bulma-text-weak);
 }
@@ -1053,7 +1060,8 @@ body:has(.login) {
 
 .macros-row {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
   margin: 1rem 0;
 }
 

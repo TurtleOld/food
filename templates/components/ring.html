@@ -11,7 +11,7 @@
       <div class="num ring-value">{{ ring.value|whole }}</div>
       <div class="muted is-size-7">из {{ ring.goal|whole }} ккал</div>
     {% else %}
-      <div class="num has-text-weight-bold">{{ ring.value|whole }}</div>
+      <div class="num has-text-weight-bold">{{ ring.value|one_decimal }}</div>
     {% endif %}
   </div>
 </div>

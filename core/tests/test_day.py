@@ -90,18 +90,20 @@ class DayPageLanguageDTest(TestCase):
             response, 'class="entry-kcal num">330 <small class="muted">ккал</small>'
         )
 
-    def test_day_total_is_shown_with_and_without_target(self):
+    def test_day_total_is_rings_or_one_text_with_mobile_brief(self):
         self._eat()
 
         without_target = self.client.get(reverse("core:day"))
         self._target()
         with_target = self.client.get(reverse("core:day"))
 
-        for response in (without_target, with_target):
-            self.assertContains(response, "Итого за день:")
-            self.assertContains(response, "330 ккал</b>")
+        self.assertContains(without_target, "330 ккал</b>")
+        self.assertContains(without_target, "Б 62,0 г")
+        self.assertContains(with_target, 'class="day-glance"')
         self.assertContains(with_target, "330&nbsp;ккал")
         self.assertContains(with_target, "&nbsp;г", count=3)
+        self.assertNotContains(with_target, "330 ккал</b>")
+        self.assertContains(with_target, "Ккал округлены до целых, БЖУ — до 0,1 г.")
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
@@ -139,9 +141,23 @@ class DayPageLanguageDTest(TestCase):
         content = response.content.decode()
         positions = [
             content.index(f"{label} · {goal} г")
-            for label, goal in (("Б", 120), ("Ж", 70), ("У", 220))
+            for label, goal in (("Б", "120,0"), ("Ж", "70,0"), ("У", "220,0"))
         ]
         self.assertEqual(positions, sorted(positions))
+
+    def test_fractional_macros_keep_one_decimal_with_comma_and_grams(self):
+        self._target()
+        self._eat("150")
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "Б 46,5 г")
+        self.assertContains(response, "Ж 5,4 г")
+        self.assertContains(response, "У 0,0 г")
+        self.assertContains(response, "150,0 г")
+        self.assertContains(response, "Ккал округлены до целых, БЖУ — до 0,1 г.")
+        self.assertNotContains(response, "46.5")
+        self.assertNotContains(response, "5.4")
 
     def test_over_target_shows_excess_and_danger_ring(self):
         self._target(calories="300")
