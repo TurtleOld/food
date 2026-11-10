@@ -199,6 +199,16 @@ class DayPageLanguageDTest(TestCase):
         for response in (empty, filled):
             self.assertContains(response, "<h2", count=5)
 
+    def test_date_controls_name_the_action_and_the_day_for_assistive_tech(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, 'aria-label="Изменить дату: 10/03/2026"')
+        self.assertContains(response, 'aria-label="Копировать день"')
+        self.assertContains(response, 'aria-label="Предыдущий день"')
+        self.assertContains(response, 'aria-label="Следующий день"')
+
     def test_feed_and_summary_share_one_block_with_feed_id(self):
         response = self.client.get(reverse("core:day"))
 
