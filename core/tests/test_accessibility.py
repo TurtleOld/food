@@ -120,6 +120,14 @@ class DayPageContrastTest(SimpleTestCase):
                     _contrast(tokens["--bulma-text-weak"], tokens["--page"]), AA_TEXT
                 )
 
+    def test_over_goal_text_passes_aa_in_light_and_dark_schemes(self):
+        css = _css()
+
+        for scheme in ("light", "dark"):
+            with self.subTest(scheme=scheme):
+                tokens = _tokens(css, scheme)
+                self.assertGreaterEqual(_contrast(tokens["--over-goal"], tokens["--page"]), AA_TEXT)
+
     def test_focus_ring_stands_out_on_the_page_in_both_schemes(self):
         css = _css()
 

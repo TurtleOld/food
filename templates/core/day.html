@@ -35,7 +35,7 @@
         <summary class="summary-toggle" aria-controls="day-summary">
           <span class="is-sr-only">Итого за день: </span>
           <span class="num"><b>{{ totals.calories|whole }}</b>{% if rings %} / {{ rings.0.goal|whole }} ккал{% else %} ккал{% endif %}</span>
-          <span class="muted num">{% if rings.0.over %}· сверх на {{ rings.0.value|sub:rings.0.goal|whole }} ккал{% elif rings %}· осталось {{ rings.0.goal|sub:rings.0.value|whole }} ккал{% else %}· цель не задана{% endif %}</span>
+          <span class="muted num{% if rings.0.over %} over-goal{% endif %}">{% if rings.0.over %}· {{ rings.0.value|sub:rings.0.goal|whole }} ккал сверх цели{% elif rings %}· осталось {{ rings.0.goal|sub:rings.0.value|whole }} ккал{% else %}· цель не задана{% endif %}</span>
           <span class="summary-caret" aria-hidden="true"></span>
         </summary>
       </details>

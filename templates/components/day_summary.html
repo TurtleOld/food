@@ -4,7 +4,7 @@
   {% with kcal=rings.0 %}
     {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}
     <p class="mt-4 muted">
-      {% if kcal.over %}Сверх цели на <b class="has-text-danger">{{ kcal.value|sub:kcal.goal|whole }}</b> ккал{% else %}Осталось <b>{{ kcal.goal|sub:kcal.value|whole }}</b> ккал{% endif %}
+      {% if kcal.over %}<b class="over-goal">{{ kcal.value|sub:kcal.goal|whole }} ккал</b> сверх цели{% else %}Осталось <b>{{ kcal.goal|sub:kcal.value|whole }}</b> ккал{% endif %}
     </p>
   {% endwith %}
   <div class="macros">
