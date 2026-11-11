@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.6.0](https://github.com/TurtleOld/food/compare/v0.5.0...v0.6.0) (2026-11-11)
+
+
+### Features
+
+* **day:** единый календарь даты с клавиатурной навигацией ([#103](https://github.com/TurtleOld/food/issues/103)) ([4000eab](https://github.com/TurtleOld/food/commit/4000eab5c3facdae77afaf7223ebcd3300ce9f6d))
+* **day:** свернуть итоги дня в мобильную плашку ([#97](https://github.com/TurtleOld/food/issues/97)) ([aef8bf3](https://github.com/TurtleOld/food/commit/aef8bf3f486639a15b6701523cd583e472c6c85b))
+* **diary:** выбранный день как главный заголовок страницы ([#81](https://github.com/TurtleOld/food/issues/81)) ([c12977f](https://github.com/TurtleOld/food/commit/c12977f3e1677773af86d9c66724b495638d4d02))
+* **diary:** подсказки пустого дня и единое семейство повторов ([#99](https://github.com/TurtleOld/food/issues/99)) ([8ddb40c](https://github.com/TurtleOld/food/commit/8ddb40c12395bd5e3557be95df65e0967aa72711))
+
+
+### Bug Fixes
+
+* **a11y:** контраст палитры, озвучка колец и единый фокус ([#101](https://github.com/TurtleOld/food/issues/101)) ([b5c7b44](https://github.com/TurtleOld/food/commit/b5c7b445aab03e2d49495b1f0a71b6f637f7635a))
+* **day:** show daily goal overage in amber instead of danger red ([#98](https://github.com/TurtleOld/food/issues/98)) ([738bb7b](https://github.com/TurtleOld/food/commit/738bb7bc222d12ea6773d8b38413a45dc8c6299e))
+* **diary:** длинные названия Продуктов не расширяют страницу ([#79](https://github.com/TurtleOld/food/issues/79)) ([49bf33f](https://github.com/TurtleOld/food/commit/49bf33f30d90bbf14629012947e92759b01b672c))
+* **diary:** добавление Записи на первом экране телефона ([#83](https://github.com/TurtleOld/food/issues/83)) ([ae8dee4](https://github.com/TurtleOld/food/commit/ae8dee4ee58d37fa77901dc6ed9aeb4d6616e4e6))
+* **diary:** единая точность, единицы и запятая в КБЖУ ([#87](https://github.com/TurtleOld/food/issues/87)) ([615ff0a](https://github.com/TurtleOld/food/commit/615ff0a8a14b670b24d81c40a3f08325418bc691))
+* **diary:** загрузка формы в шторке и копирование открытого дня без перезагрузки ([#80](https://github.com/TurtleOld/food/issues/80)) ([ef0bff3](https://github.com/TurtleOld/food/commit/ef0bff3defd42d1e4de6dfe945d37e93f4a4fe68))
+* **diary:** не опускать сводку при росте списка записей ([#77](https://github.com/TurtleOld/food/issues/77)) ([3e59a96](https://github.com/TurtleOld/food/commit/3e59a9655df6cf4ef88caef5a303d73a72e7b1c0))
+* **diary:** убрать БЖУ из ленты и приглушить «Повторить» ([#100](https://github.com/TurtleOld/food/issues/100)) ([a26faf2](https://github.com/TurtleOld/food/commit/a26faf2dc3c0cdc3aace6a1ff864600079de7a2c))
+* **diary:** удерживать фокус в шторке и возвращать его при закрытии ([#78](https://github.com/TurtleOld/food/issues/78)) ([5578c12](https://github.com/TurtleOld/food/commit/5578c124fc93145fb17f7c77dac932b803a2a224))
+* **diary:** удобные области даты и переходов между днями ([#82](https://github.com/TurtleOld/food/issues/82)) ([574f6b5](https://github.com/TurtleOld/food/commit/574f6b5a19ef61272e55b88e486467ea22290cae))
+* **ui:** полировка дня после повторной дизайн-критики ([#102](https://github.com/TurtleOld/food/issues/102)) ([e2bfe75](https://github.com/TurtleOld/food/commit/e2bfe751e9525262800e0a7a82d359fe8e37d676))
+* **ui:** унифицировать primary-кнопки, навигацию и иконки ([#96](https://github.com/TurtleOld/food/issues/96)) ([e4cb864](https://github.com/TurtleOld/food/commit/e4cb8649270a6944c68a5059685f2eca967887b5))
+
+
+### Documentation
+
+* **agents:** запретить локальные пути в публикуемых материалах ([#88](https://github.com/TurtleOld/food/issues/88)) ([691c6a2](https://github.com/TurtleOld/food/commit/691c6a21575d43622a2e3f4b791df19dd2a77565))
+
 ## [0.5.0](https://github.com/TurtleOld/food/compare/v0.4.1...v0.5.0) (2026-11-05)
 
 
