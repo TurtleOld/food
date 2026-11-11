@@ -9,6 +9,7 @@
   --page: hsl(210 30% 97.5%);
   --ring-track: hsl(210 20% 91%);
   --kcal: hsl(158 52% 42%);
+  --over-goal: hsl(38 90% 34%);
   --p: hsl(212 75% 58%);
   --f: hsl(38 90% 56%);
   --c: hsl(330 60% 62%);
@@ -19,6 +20,7 @@
   :root {
     --page: hsl(220 14% 10%);
     --ring-track: hsl(220 10% 22%);
+    --over-goal: hsl(38 85% 62%);
     --soft-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 10px 30px hsl(0 0% 0% / 0.35);
   }
 }
@@ -62,6 +64,10 @@ body {
 
 .muted {
   color: var(--bulma-text-weak);
+}
+
+.over-goal {
+  color: var(--over-goal);
 }
 
 .btn-quiet {

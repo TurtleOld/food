@@ -52,11 +52,11 @@ class DayPageLanguageDTest(TestCase):
             author=self.member,
         )
 
-    def _target(self, calories="2000"):
+    def _target(self, calories="2000", proteins="120"):
         DailyTarget.objects.create(
             member=self.member,
             calories=Decimal(calories),
-            proteins=Decimal("120"),
+            proteins=Decimal(proteins),
             fats=Decimal("70"),
             carbs=Decimal("220"),
         )
@@ -159,23 +159,35 @@ class DayPageLanguageDTest(TestCase):
         self.assertNotContains(response, "46.5")
         self.assertNotContains(response, "5.4")
 
-    def test_over_target_shows_excess_and_danger_ring(self):
+    def test_over_target_shows_amber_excess_without_danger_red(self):
         self._target(calories="300")
         self._eat()
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Сверх цели на <b")
-        self.assertContains(response, "30</b> ккал")
-        self.assertContains(response, 'stroke="var(--bulma-danger)"')
+        self.assertContains(response, '<b class="over-goal">30 ккал</b> сверх цели')
+        self.assertContains(response, 'stroke="var(--over-goal)"')
+        self.assertNotContains(response, "danger")
+        self.assertNotContains(response, "Сверх цели на")
 
-    def test_under_target_has_no_danger_ring(self):
+    def test_over_macro_goal_is_amber_not_danger_red(self):
+        self._target(proteins="10")
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "62,0 г")
+        self.assertContains(response, 'stroke="var(--over-goal)"', count=1)
+        self.assertNotContains(response, "danger")
+
+    def test_under_target_has_no_over_goal_ring(self):
         self._target()
         self._eat()
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertNotContains(response, 'stroke="var(--bulma-danger)"')
+        self.assertNotContains(response, 'stroke="var(--over-goal)"')
+        self.assertContains(response, "Осталось <b")
 
     def test_without_target_there_are_no_rings_and_goal_is_suggested(self):
         response = self.client.get(reverse("core:day"))
