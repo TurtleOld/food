@@ -54,6 +54,49 @@ class ShellTest(TestCase):
         self.assertIn("csrfmiddlewaretoken", form.group(0))
         self.assertNotRegex(html, rf'<a[^>]*href="{re.escape(reverse("core:logout"))}"')
 
+    def test_topbar_and_tabbar_list_the_five_sections_in_the_same_order(self):
+        self.client.force_login(self.member)
+
+        html = self.client.get(reverse("core:day")).content.decode()
+
+        expected = [
+            reverse("core:day"),
+            reverse("core:product_list"),
+            reverse("core:daily_target_edit"),
+            reverse("assistant:chat"),
+            reverse("core:profile"),
+        ]
+
+        def sections(markup):
+            return [href for href in re.findall(r'href="([^"]+)"', markup) if href in expected]
+
+        topbar = re.search(r'<header class="topbar">.*?</header>', html, re.S)
+        tabbar = re.search(r'<nav class="tabbar".*?</nav>', html, re.S)
+        assert topbar is not None and tabbar is not None
+
+        self.assertEqual(sections(topbar.group(0)), expected)
+        self.assertEqual(sections(tabbar.group(0)), expected)
+
+    def test_tabbar_labels_stay_readable_on_a_phone(self):
+        css_path = finders.find("css/app.css")
+        assert isinstance(css_path, str)
+        with open(css_path) as css:
+            rules = re.findall(r"\.tabbar a \{(.*?)\}", css.read(), re.S)
+
+        sizes = [
+            float(size) for rule in rules for size in re.findall(r"font-size:\s*([\d.]+)rem", rule)
+        ]
+        self.assertTrue(sizes)
+        self.assertGreaterEqual(min(sizes), 0.8)
+
+    def test_toast_style_is_defined_once(self):
+        css_path = finders.find("css/app.css")
+        assert isinstance(css_path, str)
+        with open(css_path) as css:
+            selectors = re.findall(r"^\.toast\s*\{", css.read(), re.M)
+
+        self.assertEqual(len(selectors), 1)
+
     def test_active_nav_item_is_marked_current(self):
         self.client.force_login(self.member)
 

@@ -6,7 +6,7 @@
   <h2 class="title is-4 mb-3">{% if product %}Продукт{% else %}Новый продукт{% endif %}</h2>
   {{ form.non_field_errors }}
   {% include "components/product_fields.html" %}
-  <button class="button is-primary is-fullwidth mt-5" type="submit">{% if product %}Сохранить{% else %}Добавить в каталог{% endif %}</button>
+  <button class="btn-main mt-5" type="submit">{% if product %}Сохранить{% else %}Добавить в каталог{% endif %}</button>
 </form>
 {% if product %}
   <p class="muted is-size-7 mt-4 has-text-centered">Добавил(а) {{ product.author.username }} · в {{ usage }} {{ usage|plural:"записи,записях,записях" }} дневника{% if proposal_usage %} · в {{ proposal_usage }} {{ proposal_usage|plural:"предложении,предложениях,предложениях" }}{% endif %}</p>
