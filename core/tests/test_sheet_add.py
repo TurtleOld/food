@@ -68,6 +68,16 @@ class SheetEntryPointTests(SheetAddBase):
         self.assertContains(response, 'id="search-results"')
         self.assertContains(response, "autofocus")
 
+    def test_search_wait_uses_an_icon_instead_of_an_emoji(self):
+        response = self.client.get(self.create_url, headers=HTMX)
+
+        html = response.content.decode()
+        wait = re.search(r'<p id="search-wait".*?</p>', html, re.S)
+        assert wait is not None
+
+        self.assertNotIn("⏳", html)
+        self.assertIn("<svg", wait.group(0))
+
     def test_search_step_lists_recent_with_last_amount_when_query_is_empty(self):
         self.eat(self.member, self.chicken, "180.5")
 
@@ -177,6 +187,17 @@ class SheetSearchTests(SheetAddBase):
 
 
 class SheetAmountStepTests(SheetAddBase):
+    def test_day_and_sheet_share_one_primary_button_component(self):
+        day = self.client.get(reverse("core:day"))
+        amount = self.client.get(self.create_url, {"product": self.chicken.pk}, headers=HTMX)
+
+        submit = re.search(r'<button class="([^"]*)" type="submit"', amount.content.decode())
+        assert submit is not None
+
+        self.assertContains(day, 'class="btn-main quick-add-action"')
+        self.assertIn("btn-main", submit.group(1))
+        self.assertNotIn("is-primary", submit.group(1))
+
     def test_amount_is_prefilled_with_the_members_last_amount(self):
         self.eat(self.member, self.chicken, "175")
         self.eat(self.other, self.chicken, "999")

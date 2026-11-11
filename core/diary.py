@@ -11,7 +11,7 @@ from django.db import transaction
 
 from core.forms import DiaryEntrySheetForm
 from core.models import DailyTarget, DiaryEntry, Product
-from core.nutrition import NUTRITION_ROWS
+from core.nutrition import NUTRITION_NAMES, NUTRITION_ROWS, one_decimal, whole
 from core.undo import CannotUndo, Member, Restored, make_token, restorer
 
 
@@ -119,11 +119,14 @@ class Ring:
     """Кольцо прогресса: значение дня против цели.
 
     Attributes:
+        label: короткая подпись для глаза («Б», «Ж», «У», «Ккал»).
+        aria_label: полная фраза для скринридера: значение и Суточная цель.
         pct: заполнение кольца, 0-100.
         over: значение превысило цель.
     """
 
     label: str
+    aria_label: str
     value: Decimal
     goal: Decimal
     pct: int
@@ -148,7 +151,11 @@ def meal_rows(meals: list[Meal]) -> list[MealRow]:
 
 
 def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
-    """Строит кольца ккал, Б, Ж, У в этом порядке; без Суточной цели колец нет."""
+    """Строит кольца ккал, Б, Ж, У в этом порядке; без Суточной цели колец нет.
+
+    Каждое кольцо получает `aria_label` со значением и Суточной целью: кольцо
+    читается скринридером как «Белки: 62,0 из 120,0 граммов».
+    """
     if progress is None:
         return []
     target = progress["target"]
@@ -157,8 +164,20 @@ def rings(totals: Macros, progress: Progress | None) -> list[Ring]:
         value: Decimal = totals[key]  # type: ignore[literal-required]
         goal: Decimal = getattr(target, key)
         pct = min(100, int(value / goal * 100)) if goal else 0
+        name = NUTRITION_NAMES[key]
+        if key == "calories":
+            aria_label = f"{name}: {whole(value)} из {whole(goal)} ккал"
+        else:
+            aria_label = f"{name}: {one_decimal(value)} из {one_decimal(goal)} граммов"
         result.append(
-            Ring(label=label.capitalize(), value=value, goal=goal, pct=pct, over=value > goal)
+            Ring(
+                label=label.capitalize(),
+                aria_label=aria_label,
+                value=value,
+                goal=goal,
+                pct=pct,
+                over=value > goal,
+            )
         )
     return result
 

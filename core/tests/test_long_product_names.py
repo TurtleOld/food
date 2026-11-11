@@ -45,7 +45,7 @@ class LongProductNameTest(TestCase):
 
         self.assertEqual(created.status_code, 200)
         self.assertContains(created, self.long_name)
-        self.assertContains(created, "150,0 г")
+        self.assertContains(created, "150 г")
         entry = DiaryEntry.objects.get()
 
         edit_url = reverse("core:entry_edit", args=[entry.pk])
@@ -59,7 +59,7 @@ class LongProductNameTest(TestCase):
         )
         self.assertEqual(edited.status_code, 200)
         self.assertContains(edited, self.long_name)
-        self.assertContains(edited, "250,0 г")
+        self.assertContains(edited, "250 г")
         entry.refresh_from_db()
         self.assertEqual(entry.amount, Decimal("250.0"))
 

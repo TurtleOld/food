@@ -1,20 +1,12 @@
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from django import template
 
+from core.nutrition import one_decimal, whole
+
 register = template.Library()
-
-
-@register.filter
-def whole(value: Decimal) -> str:
-    """Округляет значение КБЖУ до целого и выводит строкой без учёта локали."""
-    return str(int(value.to_integral_value(rounding=ROUND_HALF_UP)))
-
-
-@register.filter
-def one_decimal(value: Decimal) -> str:
-    """Выводит значение КБЖУ с одним знаком и запятой как десятичным разделителем."""
-    return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)).replace(".", ",")
+register.filter(whole)
+register.filter(one_decimal)
 
 
 @register.filter

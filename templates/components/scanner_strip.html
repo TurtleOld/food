@@ -7,7 +7,7 @@
     <video x-ref="video" playsinline muted></video>
     <div class="scan-msg" x-show="cam === 'asking'">Разрешите доступ к камере в окне браузера</div>
     <button type="button" class="scan-off" @click="stop()" aria-label="Выключить камеру">× выключить</button>
-    <label class="scan-photo">📷 фото<input type="file" accept="image/*" capture="environment" hidden @change="photo($event)"></label>
+    <label class="scan-photo">{% include "components/icons/photo.html" %} фото<input type="file" accept="image/*" capture="environment" hidden @change="photo($event)"></label>
   </div>
   <p class="scan-note" x-show="cam === 'denied'" x-cloak>Нет доступа к камере — разрешите её в настройках браузера. Или введите цифры штрихкода {{ where }}. <button type="button" class="scan-link" @click="start()">Ещё раз</button></p>
   <p class="scan-note" x-show="cam === 'nocam' || cam === 'insecure'" x-cloak><span x-text="cam === 'nocam' ? 'Камеры нет' : 'Камера работает только по HTTPS'"></span> — введите цифры или <label class="scan-link">загрузите фото<input type="file" accept="image/*" capture="environment" hidden @change="photo($event)"></label>.</p>
