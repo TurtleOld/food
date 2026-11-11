@@ -1,9 +1,11 @@
 import datetime
+import re
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.formats import date_format
 
 from core.models import DailyTarget, DiaryEntry, Product
 
@@ -88,16 +90,20 @@ class DayPageLanguageDTest(TestCase):
             response, 'class="entry-kcal num">330 <small class="muted">ккал</small>'
         )
 
-    def test_day_total_is_shown_with_and_without_target(self):
+    def test_day_total_is_rings_or_one_text_with_mobile_brief(self):
         self._eat()
 
         without_target = self.client.get(reverse("core:day"))
         self._target()
         with_target = self.client.get(reverse("core:day"))
 
-        for response in (without_target, with_target):
-            self.assertContains(response, "Итого за день:")
-            self.assertContains(response, "330 ккал</b>")
+        self.assertContains(without_target, "330 ккал</b>")
+        self.assertContains(without_target, "Б 62,0 г")
+        self.assertContains(with_target, 'class="day-glance"')
+        self.assertContains(with_target, "330&nbsp;ккал")
+        self.assertContains(with_target, "&nbsp;г", count=3)
+        self.assertNotContains(with_target, "330 ккал</b>")
+        self.assertContains(with_target, "Ккал округлены до целых, БЖУ — до 0,1 г.")
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
@@ -110,13 +116,18 @@ class DayPageLanguageDTest(TestCase):
         self.assertNotContains(response, "✎")
         self.assertNotContains(response, reverse("core:entry_delete", args=[entry.pk]))
 
-    def test_what_did_you_eat_row_links_to_add_page(self):
+    def test_primary_add_action_leads_to_add_page_before_the_summary(self):
+        self._target()
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Что съели?")
-        self.assertContains(
-            response, f'href="{reverse("core:entry_create", args=[self.today.isoformat()])}"'
-        )
+        content = response.content.decode()
+        add_url = reverse("core:entry_create", args=[self.today.isoformat()])
+        self.assertContains(response, "Добавить запись")
+        self.assertContains(response, f'href="{add_url}"')
+        self.assertContains(response, f'href="{add_url}?scan=1"')
+        self.assertContains(response, 'aria-label="Сканер штрихкода"')
+        self.assertLess(content.index("Добавить запись"), content.index("Итого за день:"))
+        self.assertLess(content.index("Итого за день:"), content.index('class="ring"'))
 
     def test_rings_show_kcal_of_target_and_macro_goals_in_order(self):
         self._target()
@@ -130,9 +141,23 @@ class DayPageLanguageDTest(TestCase):
         content = response.content.decode()
         positions = [
             content.index(f"{label} · {goal} г")
-            for label, goal in (("Б", 120), ("Ж", 70), ("У", 220))
+            for label, goal in (("Б", "120,0"), ("Ж", "70,0"), ("У", "220,0"))
         ]
         self.assertEqual(positions, sorted(positions))
+
+    def test_fractional_macros_keep_one_decimal_with_comma_and_grams(self):
+        self._target()
+        self._eat("150")
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "Б 46,5 г")
+        self.assertContains(response, "Ж 5,4 г")
+        self.assertContains(response, "У 0,0 г")
+        self.assertContains(response, "150,0 г")
+        self.assertContains(response, "Ккал округлены до целых, БЖУ — до 0,1 г.")
+        self.assertNotContains(response, "46.5")
+        self.assertNotContains(response, "5.4")
 
     def test_over_target_shows_excess_and_danger_ring(self):
         self._target(calories="300")
@@ -167,6 +192,45 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, "10/03/2026")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
+
+    def test_day_page_has_one_main_heading_naming_today_and_its_date(self):
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "<h1", count=1)
+        self.assertRegex(
+            response.content.decode(),
+            r"<h1\b[^>]*>Сегодня<span\b[^>]*>, "
+            f"{re.escape(date_format(self.today, 'j E Y'))}</span></h1>",
+        )
+
+    def test_past_day_main_heading_names_the_weekday_and_date(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertRegex(
+            response.content.decode(),
+            rf"<h1\b[^>]*>{re.escape(date_format(day, 'l'))}<span\b[^>]*>, "
+            f"{re.escape(date_format(day, 'j E Y'))}</span></h1>",
+        )
+
+    def test_every_meal_is_an_h2_heading_on_empty_and_filled_days(self):
+        empty = self.client.get(reverse("core:day"))
+        self._eat()
+        filled = self.client.get(reverse("core:day"))
+
+        for response in (empty, filled):
+            self.assertContains(response, "<h2", count=5)
+
+    def test_date_controls_name_the_action_and_the_day_for_assistive_tech(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, 'aria-label="Изменить дату: 10/03/2026"')
+        self.assertContains(response, 'aria-label="Копировать день"')
+        self.assertContains(response, 'aria-label="Предыдущий день"')
+        self.assertContains(response, 'aria-label="Следующий день"')
 
     def test_feed_and_summary_share_one_block_with_feed_id(self):
         response = self.client.get(reverse("core:day"))
