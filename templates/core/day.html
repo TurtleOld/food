@@ -31,31 +31,16 @@
     </div>
 
     <div class="summary-col">
-      <div class="box summary has-text-centered">
-        <p class="day-glance">{% include "components/day_total.html" with units=True %}</p>
-        {% if rings %}
-          {% with kcal=rings.0 %}
-            {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}
-            <p class="mt-4 muted">
-              {% if kcal.over %}Сверх цели на <b class="has-text-danger">{{ kcal.value|sub:kcal.goal|whole }}</b> ккал{% else %}Осталось <b>{{ kcal.goal|sub:kcal.value|whole }}</b> ккал{% endif %}
-            </p>
-          {% endwith %}
-          <div class="macros">
-            {% for ring in rings|slice:"1:" %}
-              <div class="item">
-                {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
-                {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
-                <span class="is-size-7 muted unit-pair">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
-              </div>
-            {% endfor %}
-          </div>
-          <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
-        {% else %}
-          <p class="muted">Цель не задана</p>
-          <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
-        {% endif %}
-        {% if not rings %}<p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>{% endif %}
-        <p class="muted is-size-7 mt-3">Ккал округлены до целых, БЖУ — до 0,1 г.</p>
+      <details class="summary summary-brief">
+        <summary class="summary-toggle" aria-controls="day-summary">
+          <span class="is-sr-only">Итого за день: </span>
+          <span class="num"><b>{{ totals.calories|whole }}</b>{% if rings %} / {{ rings.0.goal|whole }} ккал{% else %} ккал{% endif %}</span>
+          <span class="muted num{% if rings.0.over %} over-goal{% endif %}">{% if rings.0.over %}· {{ rings.0.value|sub:rings.0.goal|whole }} ккал сверх цели{% elif rings %}· осталось {{ rings.0.goal|sub:rings.0.value|whole }} ккал{% else %}· цель не задана{% endif %}</span>
+          <span class="summary-caret" aria-hidden="true"></span>
+        </summary>
+      </details>
+      <div id="day-summary" class="box summary summary-full has-text-centered" title="Ккал округлены до целых, БЖУ — до 0,1 г.">
+        {% include "components/day_summary.html" %}
       </div>
     </div>
 
@@ -75,15 +60,15 @@
                      hx-get="{% url 'core:entry_edit' entry.pk %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">
                     <span>
                       <span class="entry-name">{{ entry.product.name }}</span>
-                      <span class="entry-detail is-size-7 muted num"><span class="unit-pair">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> · <span class="unit-pair">Б {{ entry.proteins|one_decimal }} г</span> · <span class="unit-pair">Ж {{ entry.fats|one_decimal }} г</span> · <span class="unit-pair">У {{ entry.carbs|one_decimal }} г</span></span>
+                      <span class="entry-detail is-size-7 muted num"><span class="unit-pair">{{ entry.amount|floatformat:"-1" }} {{ entry.product.get_base_unit_display }}</span></span>
                     </span>
                     <span class="entry-kcal num">{{ entry.calories|whole }} <small class="muted">ккал</small></span>
                   </a>
                 {% endfor %}
                 <div class="meal-actions">
-                  <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
-                     hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)"><span class="muted">+ добавить</span></a>
-                  <a class="add-meal" href="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}"
+                  <a class="add-meal meal-add" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
+                     hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">+ добавить</a>
+                  <a class="add-meal meal-repeat" href="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}"
                      hx-get="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Повторить</a>
                 </div>
               </div>
