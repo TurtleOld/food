@@ -332,23 +332,77 @@ class DayPageLanguageDTest(TestCase):
             response, f'class="btn-main mt-2" href="{reverse("core:daily_target_edit")}"'
         )
 
-    def test_date_button_falls_back_when_show_picker_is_missing(self):
+    def test_date_button_opens_a_calendar_without_native_picker(self):
         response = self.client.get(reverse("core:day"))
 
-        button = re.search(r'<button[^>]*class="date-pick"[^>]*>', response.content.decode())
-        assert button is not None
+        self.assertContains(response, 'aria-haspopup="dialog"')
+        self.assertContains(response, 'aria-controls="date-calendar"')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, 'id="date-calendar"')
+        self.assertContains(response, 'role="dialog" aria-label="Выбор даты"')
+        self.assertContains(response, f'data-selected="{self.today.isoformat()}"')
+        self.assertNotContains(response, 'class="date-native"')
 
-        self.assertIn("showPicker", button.group(0))
-        self.assertIn(".click()", button.group(0))
-
-    def test_date_input_carries_current_day_and_arrows_switch_days(self):
+    def test_calendar_names_its_navigation_and_the_shown_day(self):
         day = datetime.date(2026, 3, 10)
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, "10.03.2026")
+        self.assertContains(response, 'aria-label="Предыдущий месяц"')
+        self.assertContains(response, 'aria-label="Следующий месяц"')
+        self.assertContains(response, 'aria-label="Закрыть календарь"')
+        self.assertContains(response, f'data-selected="{day.isoformat()}"')
+
+    def test_day_on_shows_the_diary_of_the_selected_date(self):
+        day = self.today - datetime.timedelta(days=3)
+        self._eat()
+        oats = Product.objects.create(
+            name="Овсянка",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("370.0"),
+            proteins=Decimal("13.0"),
+            fats=Decimal("6.0"),
+            carbs=Decimal("62.0"),
+            author=self.member,
+        )
+        DiaryEntry.objects.create(
+            member=self.member,
+            date=day,
+            meal_type=DiaryEntry.MealType.BREAKFAST,
+            product=oats,
+            amount=Decimal("80"),
+        )
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, f'data-selected="{day.isoformat()}"')
+        self.assertContains(response, date_format(day, "d-m-Y"))
+        self.assertContains(response, "Овсянка")
+        self.assertNotContains(response, "Куриная грудка")
+
+    def test_date_button_carries_current_day_in_dd_mm_yyyy_and_arrows_switch_days(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, "<span>10-03-2026</span>")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
+
+    def test_calendar_week_starts_on_monday_with_russian_short_names(self):
+        response = self.client.get(reverse("core:day"))
+
+        row = re.search(
+            r'<div class="calendar-weekdays"[^>]*>(.*?)</div>',
+            response.content.decode(),
+            re.S,
+        )
+        assert row is not None
+
+        self.assertEqual(
+            re.findall(r"<span>([^<]+)</span>", row.group(1)),
+            ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+        )
 
     def test_day_page_has_one_main_heading_naming_today_and_its_date(self):
         response = self.client.get(reverse("core:day"))
@@ -357,7 +411,7 @@ class DayPageLanguageDTest(TestCase):
         self.assertRegex(
             response.content.decode(),
             r"<h1\b[^>]*>Сегодня<span\b[^>]*>, "
-            f"{re.escape(date_format(self.today, 'j E Y'))}</span></h1>",
+            f"{re.escape(date_format(self.today, 'd-m-Y'))}</span></h1>",
         )
 
     def test_past_day_main_heading_names_the_weekday_and_date(self):
@@ -368,7 +422,7 @@ class DayPageLanguageDTest(TestCase):
         self.assertRegex(
             response.content.decode(),
             rf"<h1\b[^>]*>{re.escape(date_format(day, 'l'))}<span\b[^>]*>, "
-            f"{re.escape(date_format(day, 'j E Y'))}</span></h1>",
+            f"{re.escape(date_format(day, 'd-m-Y'))}</span></h1>",
         )
 
     def test_every_meal_is_an_h2_heading_on_empty_and_filled_days(self):
@@ -384,7 +438,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, 'aria-label="Изменить дату: 10.03.2026"')
+        self.assertContains(response, 'aria-label="Изменить дату: 10-03-2026"')
         self.assertContains(response, 'aria-label="Повторить день"')
         self.assertContains(response, ">Повторить день<")
         self.assertContains(response, 'aria-label="Предыдущий день"')
