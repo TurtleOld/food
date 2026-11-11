@@ -1,17 +1,25 @@
+/* Брендовый зелёный и приглушённый текст затемнены до контраста ≥ 4.5:1 (WCAG AA):
+   белый текст кнопки на --kcal и muted-подписи на --page. Палитра нутриентов
+   (--kcal, --p, --f, --c) остаётся общей для кольца дня, шторки записи и чата. */
 :root {
   --bulma-primary-h: 158deg;
   --bulma-primary-s: 52%;
-  --bulma-primary-l: 42%;
+  --bulma-primary-l: 32%;
+  /* Тёмный invert Bulma даёт на затемнённом зелёном меньше 4.5:1, поэтому текст
+     primary-кнопок и выбранных чипов белый. */
+  --bulma-primary-invert-l: 100%;
   --bulma-radius: 0.75rem;
   --bulma-radius-large: 1.5rem;
   --bulma-radius-small: 0.5rem;
   --soft-shadow: 0 1px 2px hsl(220 30% 20% / 0.04), 0 8px 28px hsl(220 30% 20% / 0.07);
   --page: hsl(210 30% 97.5%);
   --ring-track: hsl(210 20% 91%);
-  --kcal: hsl(158 52% 42%);
+  --kcal: hsl(158 52% 32%);
   --p: hsl(212 75% 58%);
   --f: hsl(38 90% 56%);
   --c: hsl(330 60% 62%);
+  --bulma-text-weak: hsl(221 14% 42%);
+  --focus-ring: hsl(221 14% 21%);
   color-scheme: light dark;
 }
 
@@ -19,6 +27,8 @@
   :root {
     --page: hsl(220 14% 10%);
     --ring-track: hsl(220 10% 22%);
+    --bulma-text-weak: hsl(221 14% 60%);
+    --focus-ring: hsl(221 14% 93%);
     --soft-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 10px 30px hsl(0 0% 0% / 0.35);
   }
 }
@@ -265,17 +275,6 @@ body {
   .logout-label {
     display: none;
   }
-}
-
-.topbar-link:focus-visible,
-.profile-chip:focus-visible,
-.logout-button:focus-visible,
-.tabbar a:focus-visible,
-.date-step:focus-visible,
-.date-pick:focus-visible,
-.date-copy:focus-visible {
-  outline: 2px solid var(--kcal);
-  outline-offset: 2px;
 }
 
 .tabbar {
@@ -538,8 +537,48 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.day-glance {
+/* The phone folds the full summary into a one-line plaque that opens on tap;
+   the desktop card is kept as-is. */
+.summary-brief {
   display: none;
+}
+
+.summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--bulma-scheme-main);
+  box-shadow: var(--soft-shadow);
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.summary-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.summary-caret {
+  flex: none;
+  margin-left: auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  opacity: 0.6;
+}
+
+.summary-brief[open] .summary-caret {
+  transform: rotate(225deg);
 }
 
 .ring {
@@ -645,12 +684,6 @@ body {
 
 .quick-add-scan:hover {
   color: var(--bulma-text-strong);
-}
-
-.quick-add-scan:focus-visible,
-.quick-add-action:focus-visible {
-  outline: 2px solid var(--bulma-text-strong);
-  outline-offset: 2px;
 }
 
 .timeline {
@@ -776,10 +809,19 @@ body {
     margin-bottom: 1rem;
   }
 
-  .day-glance {
+  .summary-brief {
     display: block;
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .summary-full {
+    display: none;
+  }
+
+  /* The plaque owns only the toggle: the full card stays a sibling, so the
+     page renders one set of rings instead of two copies. */
+  .summary-brief[open] + .summary-full {
+    display: block;
   }
 
   .summary .day-total {
@@ -856,10 +898,6 @@ body:has(.login) {
   border-radius: var(--bulma-radius);
   padding: 0.85rem 1rem;
   font: inherit;
-}
-
-.field-quiet:focus {
-  outline: 2px solid var(--kcal);
 }
 
 .btn-main {
@@ -1003,12 +1041,6 @@ body:has(.login) {
   margin-top: 0.35rem;
 }
 
-/* Фокус на панели — только чтобы скринридер прочитал «Результат неясен»;
-   панель не интерактивна. */
-.sheet-state-error:focus {
-  outline: none;
-}
-
 @media (min-width: 1024px) {
   .sheet {
     inset: 50% auto auto 50%;
@@ -1033,10 +1065,6 @@ body:has(.login) {
   font-weight: 800;
   letter-spacing: -0.03em;
   padding: 0;
-}
-
-.amount-input:focus {
-  outline: none;
 }
 
 .quick-amounts,
@@ -1072,7 +1100,8 @@ body:has(.login) {
 }
 
 .chip:has(input:focus-visible) {
-  outline: 2px solid var(--bulma-primary);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .macros-row {
@@ -1250,11 +1279,6 @@ body:has(.login) {
   color-scheme: light dark;
 }
 
-.field-day input:focus {
-  outline: 2px solid var(--bulma-primary);
-  outline-offset: 1px;
-}
-
 /* Bulma's .delete paints its own cross; the chip needs room so it does not sit on the code. */
 .chip .delete {
   margin-left: 0.4rem;
@@ -1335,7 +1359,7 @@ body:has(.login) {
 }
 
 .chat-feed:focus-visible {
-  outline: 2px solid var(--bulma-primary);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -1594,8 +1618,8 @@ body:has(.login) {
 }
 
 .chat-photo-pick:focus-within .chat-photo-button {
-  outline: 2px solid var(--bulma-primary);
-  outline-offset: 1px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .chat-photo-remove {
@@ -1751,4 +1775,34 @@ body:has(.login) {
 .proposal-form-actions .btn-main {
   width: auto;
   min-width: 9rem;
+}
+
+/* Единый focus-стиль: тёмная обводка читается и на светлой подложке, и на
+   брендовом зелёном, а отступ не даёт ей слиться с самой кнопкой. Правило идёт
+   последним, чтобы `all: unset` у отдельных контролов не снимал обводку. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Bulma рисует поверх общей обводки своё голубое свечение и рамку. */
+.button:focus-visible,
+.input:focus-visible,
+.textarea:focus-visible,
+.select select:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Фокус на панели — только чтобы скринридер прочитал «Результат неясен»;
+   панель не интерактивна, поэтому общей обводки у неё нет. Правило стоит
+   последним, иначе общее правило перебило бы его по порядку. */
+.sheet-state-error:focus,
+.sheet-state-error:focus-visible {
+  outline: none;
 }
