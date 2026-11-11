@@ -45,14 +45,16 @@
       {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
 
       <button class="btn-main mt-5" type="submit">Сохранить</button>
-      <p class="mt-4 has-text-centered"><a class="has-text-danger" href="{% url 'core:entry_delete' entry.pk %}" hx-post="{% url 'core:entry_delete' entry.pk %}">Удалить запись</a></p>
-      <p class="mt-2 has-text-centered"><a href="{% url 'core:diary_copy' entry.date.isoformat %}?entry={{ entry.pk }}"
-         hx-get="{% url 'core:diary_copy' entry.date.isoformat %}?entry={{ entry.pk }}" hx-target="#sheet-body" hx-swap="innerHTML">Повторить запись</a></p>
+      <div class="entry-secondary">
+        <a class="btn-quiet" href="{% url 'core:diary_copy' entry.date.isoformat %}?entry={{ entry.pk }}"
+           hx-get="{% url 'core:diary_copy' entry.date.isoformat %}?entry={{ entry.pk }}" hx-target="#sheet-body" hx-swap="innerHTML">Повторить запись</a>
+        <a class="btn-quiet danger-action" href="{% url 'core:entry_delete' entry.pk %}" hx-post="{% url 'core:entry_delete' entry.pk %}">Удалить запись</a>
+      </div>
     </form>
     {% endpartialdef %}
     <p><a href="{{ cancel_url }}">Отмена</a></p>
   {% else %}
-    <h1>Новая запись — {{ date|date:"d/m/Y" }}</h1>
+    <h1>Новая запись — {{ date|date:"d.m.Y" }}</h1>
     <form method="post">
       {% csrf_token %}
       {{ form.as_p }}

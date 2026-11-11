@@ -9,7 +9,7 @@
         <h1 class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}<span class="is-sr-only">, {{ current_date|date:"j E Y" }}</span></h1>
         <div class="date-actions" x-data>
           <button type="button" class="date-pick" @click="try { $refs.picker.showPicker() } catch { $refs.picker.focus(); $refs.picker.click() }"
-                  aria-label="Изменить дату: {{ current_date|date:'d/m/Y' }}">{{ current_date|date:"d/m/Y" }}</button>
+                  aria-label="Изменить дату: {{ current_date|date:'d.m.Y' }}">{{ current_date|date:"d.m.Y" }}</button>
           <a class="date-copy" href="{% url 'core:diary_copy' current_date.isoformat %}"
              hx-get="{% url 'core:diary_copy' current_date.isoformat %}" hx-target="#sheet-body" hx-swap="innerHTML"
              @click="openSheet($event)" aria-label="Повторить день">Повторить день</a>

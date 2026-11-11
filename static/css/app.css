@@ -22,6 +22,9 @@
   --c: hsl(330 60% 62%);
   --bulma-text-weak: hsl(221 14% 42%);
   --focus-ring: hsl(221 14% 21%);
+  /* Bulma's default danger (L 70%) читается на белом как 2,8:1 — ниже AA.
+     Красный остаётся сигналом ошибки, но текст ошибок и «Удалить» темнее. */
+  --danger-text: hsl(348 80% 38%);
   color-scheme: light dark;
 }
 
@@ -32,6 +35,7 @@
     --over-goal: hsl(38 85% 62%);
     --bulma-text-weak: hsl(221 14% 60%);
     --focus-ring: hsl(221 14% 93%);
+    --danger-text: hsl(348 90% 74%);
     --soft-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 10px 30px hsl(0 0% 0% / 0.35);
   }
 }
@@ -62,6 +66,16 @@ body {
   border-radius: var(--bulma-radius-large);
 }
 
+@media (prefers-color-scheme: dark) {
+  /* На тёмной подложке заливка карточки почти совпадает с фоном страницы,
+     поэтому карточку отделяет тонкая граница, а не только тень. */
+  .box,
+  .card,
+  .summary-toggle {
+    border: 1px solid var(--bulma-border-weak);
+  }
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }
@@ -77,6 +91,13 @@ body {
   color: var(--bulma-text-weak);
 }
 
+/* Ошибки и разрушительные действия берут общий --danger-text: Bulma-классы
+   .help.is-danger и .has-text-danger иначе остаются на 2,8:1. */
+.help.is-danger,
+.has-text-danger {
+  color: var(--danger-text) !important;
+}
+
 .over-goal {
   color: var(--over-goal);
 }
@@ -84,7 +105,9 @@ body {
 .btn-quiet {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  min-height: 2.75rem;
   border: 0;
   background: none;
   cursor: pointer;
@@ -380,7 +403,7 @@ body {
 }
 
 .toast.is-error {
-  color: var(--bulma-danger);
+  color: var(--danger-text);
 }
 
 .goal-row {
@@ -449,7 +472,7 @@ body {
     "prev title next"
     "actions actions actions";
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
@@ -465,12 +488,13 @@ body {
 }
 
 .date-actions {
+  position: relative;
   grid-area: actions;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .date-step {
@@ -764,9 +788,11 @@ body {
   font-weight: 600;
 }
 
+/* Одна цель нажатия у каждой строки «добавить», включая пустой Приём пищи. */
 .add-meal {
-  display: block;
-  padding: 0.6rem 0;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
   color: var(--bulma-text-weak);
 }
 
@@ -779,12 +805,6 @@ body {
 
 .meal-repeat {
   font-size: 0.8rem;
-}
-
-.meal-actions .add-meal {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
 }
 
 .add-meal:hover {
@@ -1126,6 +1146,26 @@ body:has(.login) {
   display: grid;
   gap: 0.25rem;
   margin-top: 1rem;
+}
+
+/* Второстепенные действия шторки Записи отделены от «Сохранить»: строки
+   переиспользуют .btn-quiet, удаление последнее и в общем danger-цвете. */
+.entry-secondary {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bulma-border-weak);
+}
+
+.entry-secondary .danger-action {
+  color: var(--danger-text);
+}
+
+.entry-secondary .danger-action:hover {
+  color: var(--danger-text);
+  text-decoration: underline;
 }
 
 .result {

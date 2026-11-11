@@ -344,7 +344,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, "10/03/2026")
+        self.assertContains(response, "10.03.2026")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
 
@@ -382,7 +382,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, 'aria-label="Изменить дату: 10/03/2026"')
+        self.assertContains(response, 'aria-label="Изменить дату: 10.03.2026"')
         self.assertContains(response, 'aria-label="Повторить день"')
         self.assertContains(response, ">Повторить день<")
         self.assertContains(response, 'aria-label="Предыдущий день"')

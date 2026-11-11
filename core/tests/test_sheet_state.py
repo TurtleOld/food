@@ -42,5 +42,5 @@ class SheetWaitingStateTests(TestCase):
             with self.subTest(page=name):
                 response = self.client.get(url)
 
-                self.assertContains(response, "Результат неясен")
+                self.assertContains(response, "Связь прервалась")
                 self.assertContains(response, "Проверьте, применилось ли изменение")

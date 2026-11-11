@@ -138,6 +138,21 @@ class DayPageContrastTest(SimpleTestCase):
                     _contrast(tokens["--focus-ring"], tokens["--page"]), AA_NON_TEXT
                 )
 
+    def test_danger_text_passes_aa_on_cards_and_page(self):
+        css = _css()
+
+        for scheme, surface in (("light", "#fff"), ("dark", "var(--page)")):
+            with self.subTest(scheme=scheme):
+                tokens = _tokens(css, scheme)
+                background = tokens["--page"] if surface == "var(--page)" else surface
+                self.assertGreaterEqual(_contrast(tokens["--danger-text"], background), AA_TEXT)
+
+    def test_error_toast_uses_the_danger_token(self):
+        css = _css()
+        rule = _rule(css, ".toast.is-error")
+
+        self.assertEqual(_declaration(rule, "color"), "var(--danger-text)")
+
 
 class FocusStyleTest(SimpleTestCase):
     """Одна и та же обводка фокуса на всех интерактивных элементах."""
