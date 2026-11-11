@@ -70,6 +70,15 @@ class SheetEditTests(TestCase):
         self.assertContains(response, "100,0 г")
         self.assertNotContains(response, "100.0 г")
 
+    def test_edit_sheet_shows_the_entry_macros_for_its_quantity(self):
+        response = self.client.get(self.edit_url, headers=HTMX)
+
+        self.assertContains(response, 'id="macros"')
+        self.assertContains(response, "165 ккал")
+        self.assertContains(response, "Б 31,0 г")
+        self.assertContains(response, "Ж 3,6 г")
+        self.assertContains(response, "У 0,0 г")
+
     def test_fragment_offers_quick_amounts_and_last_amount_of_the_product(self):
         DiaryEntry.objects.create(
             member=self.member,
