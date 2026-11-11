@@ -66,8 +66,8 @@
   <div id="toasts" aria-live="polite">
     {% include "components/toasts.html" %}
     <div class="toast is-error" role="alert" x-data="{ shown: false, timer: null }" x-show="shown" x-cloak
-         @htmx:response-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)"
-         @htmx:send-error.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000)">Не получилось, попробуйте ещё раз</div>
+         @htmx:response-error.window="if (!$event.detail.sheetHandled) { shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000) }"
+         @htmx:send-error.window="if (!$event.detail.sheetHandled) { shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 8000) }">Не получилось, попробуйте ещё раз</div>
   </div>
   {% block scripts %}{% endblock %}
   <script>

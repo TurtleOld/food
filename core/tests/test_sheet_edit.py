@@ -67,6 +67,8 @@ class SheetEditTests(TestCase):
         self.assertNotContains(response, "<html")
         self.assertContains(response, 'id="form"')
         self.assertContains(response, "Курица")
+        self.assertContains(response, "100,0 г")
+        self.assertNotContains(response, "100.0 г")
 
     def test_fragment_offers_quick_amounts_and_last_amount_of_the_product(self):
         DiaryEntry.objects.create(
@@ -81,6 +83,21 @@ class SheetEditTests(TestCase):
 
         for amount in (50, 100, 150, 200, 175):
             self.assertContains(response, f'data-amount="{amount}"')
+
+    def test_last_amount_chip_is_localized_but_keeps_machine_value(self):
+        DiaryEntry.objects.create(
+            member=self.member,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.DINNER,
+            product=self.chicken,
+            amount=Decimal("180.5"),
+        )
+
+        response = self.client.get(self.edit_url, headers=HTMX)
+
+        self.assertContains(response, "последнее · 180,5")
+        self.assertContains(response, 'data-amount="180.5"')
+        self.assertNotContains(response, "последнее · 180.5")
 
     def test_valid_htmx_post_saves_and_returns_feed_with_oob_toast(self):
         response = self.client.post(self.edit_url, self.valid, headers=HTMX)

@@ -1,0 +1,8 @@
+{% load nutrition %}
+{% comment %}КБЖУ выбранного количества в шторке и на странице правки; контекст: `macros`.{% endcomment %}
+<div id="macros" class="macros-row num">
+  <span class="macro" style="--dot: var(--kcal)"><b>{% if macros %}{{ macros.calories|whole }} ккал{% else %}—{% endif %}</b></span>
+  <span class="macro" style="--dot: var(--p)"><b>{% if macros %}Б {{ macros.proteins|one_decimal }} г{% else %}Б —{% endif %}</b></span>
+  <span class="macro" style="--dot: var(--f)"><b>{% if macros %}Ж {{ macros.fats|one_decimal }} г{% else %}Ж —{% endif %}</b></span>
+  <span class="macro" style="--dot: var(--c)"><b>{% if macros %}У {{ macros.carbs|one_decimal }} г{% else %}У —{% endif %}</b></span>
+</div>

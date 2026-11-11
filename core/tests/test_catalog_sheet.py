@@ -55,6 +55,7 @@ class CatalogListTests(CatalogBase):
         self.assertContains(response, "Курица")
         self.assertContains(response, "165")
         self.assertContains(response, "/ 100 г")
+        self.assertContains(response, "Б 10,0 г")
 
     def test_millilitre_product_shows_per_100_ml(self):
         Product.objects.create(

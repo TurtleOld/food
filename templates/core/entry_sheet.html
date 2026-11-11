@@ -10,7 +10,7 @@
         <a class="result" data-catalog href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=code_search.product.pk meal=meal hour=hour code=code_search.code %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=code_search.product.pk meal=meal hour=hour code=code_search.code %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ code_search.product.name }} <span class="chip">▦ в каталоге</span></span>
-          <span class="entry-detail is-size-7 muted">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ code_search.product.calories|whole }} ккал на 100 {{ code_search.product.get_base_unit_display }}</span>
         </a>
       {% else %}
         {% url 'core:entry_product_new' date.isoformat as new_url %}
@@ -42,13 +42,13 @@
         <button type="button" class="result" hx-post="{% url 'core:entry_barcode_bind' date.isoformat %}"
                 hx-vals="{% hx_vals product=product.pk code=bind meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ product.name }}</span>
-          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
         </button>
       {% else %}
         <a class="result" href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=product.pk meal=meal hour=hour %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=product.pk meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ product.name }}</span>
-          <span class="entry-detail is-size-7 muted">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted nowrap">{{ product.calories|whole }} ккал на 100 {{ product.get_base_unit_display }}</span>
         </a>
       {% endif %}
     {% empty %}
@@ -73,7 +73,7 @@
         <a class="result" href="{% url 'core:entry_create' date.isoformat %}?{% query_string product=item.product.pk meal=meal hour=hour %}"
            hx-get="{% url 'core:entry_create' date.isoformat %}?{% query_string product=item.product.pk meal=meal hour=hour %}" hx-target="#sheet-body" hx-swap="innerHTML">
           <span class="entry-name">{{ item.product.name }}</span>
-          <span class="entry-detail is-size-7 muted num">{{ item.amount|floatformat:"-1u" }} {{ item.product.get_base_unit_display }}</span>
+          <span class="entry-detail is-size-7 muted num"><span class="unit-pair">{{ item.amount|one_decimal }} {{ item.product.get_base_unit_display }}</span></span>
         </a>
       {% endif %}
     {% endfor %}
@@ -105,12 +105,7 @@
 {% endpartialdef %}
 
 {% partialdef macros inline %}
-<div id="macros" class="macros-row num">
-  <span class="macro" style="--dot: var(--kcal)"><b>{% if macros %}{{ macros.calories|whole }}{% else %}—{% endif %}</b> ккал</span>
-  <span class="macro" style="--dot: var(--p)"><b>{% if macros %}{{ macros.proteins|one_decimal }}{% else %}—{% endif %}</b> Б</span>
-  <span class="macro" style="--dot: var(--f)"><b>{% if macros %}{{ macros.fats|one_decimal }}{% else %}—{% endif %}</b> Ж</span>
-  <span class="macro" style="--dot: var(--c)"><b>{% if macros %}{{ macros.carbs|one_decimal }}{% else %}—{% endif %}</b> У</span>
-</div>
+{% include "components/macros.html" %}
 {% endpartialdef %}
 
 {% partialdef amount inline %}
@@ -136,7 +131,7 @@
   {% for error in form.amount.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
   <div class="quick-amounts">
     {% if last_amount %}
-      <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|floatformat:"-1u" }}</button>
+      <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|one_decimal }}</button>
     {% endif %}
     {% for quick in quick_amounts %}
       <button type="button" class="chip" data-amount="{{ quick }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">{{ quick }}</button>

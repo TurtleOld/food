@@ -69,13 +69,26 @@ class SheetEntryPointTests(SheetAddBase):
         self.assertContains(response, "autofocus")
 
     def test_search_step_lists_recent_with_last_amount_when_query_is_empty(self):
-        self.eat(self.member, self.chicken, "175")
+        self.eat(self.member, self.chicken, "180.5")
 
         response = self.client.get(self.create_url, headers=HTMX)
 
         self.assertContains(response, "Недавние")
         self.assertContains(response, "Курица")
-        self.assertContains(response, "175")
+        self.assertContains(response, "180,5 г")
+        self.assertNotContains(response, "180.5 г")
+
+    def test_amount_step_shows_last_amount_with_comma_and_keeps_machine_value(self):
+        self.eat(self.member, self.chicken, "180.5")
+
+        response = self.client.get(
+            self.create_url, {"product": self.chicken.pk, "meal": "lunch"}, headers=HTMX
+        )
+
+        self.assertContains(response, "последнее · 180,5")
+        self.assertContains(response, 'data-amount="180.5"')
+        self.assertContains(response, 'value="180.5"')
+        self.assertNotContains(response, "последнее · 180.5")
 
     def test_meal_from_the_card_is_carried_into_the_amount_step(self):
         response = self.client.get(
@@ -199,6 +212,18 @@ class SheetAmountStepTests(SheetAddBase):
 
         self.assertContains(response, 'id="macros"')
         self.assertContains(response, "330")
+        self.assertContains(response, "Б 20,0 г")
+        self.assertContains(response, "Ж 10,0 г")
+        self.assertContains(response, "У 40,0 г")
+
+    def test_draft_preview_rounds_fractional_macros_to_one_comma_decimal(self):
+        response = self.client.get(
+            self.preview_url, {"product": self.chicken.pk, "amount": "175"}, headers=HTMX
+        )
+
+        self.assertContains(response, "Б 17,5 г")
+        self.assertContains(response, "Ж 8,8 г")
+        self.assertContains(response, "У 35,0 г")
 
     def test_draft_preview_with_invalid_amount_shows_no_numbers(self):
         response = self.client.get(
