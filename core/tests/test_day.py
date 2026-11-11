@@ -29,6 +29,40 @@ class DayPageTest(TestCase):
         self.assertContains(response, "alice")
         self.assertContains(response, "· добавить", count=5)
 
+    def test_empty_day_explains_the_first_step_the_ring_and_the_daily_target(self):
+        member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(member)
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "Начните с первой записи")
+        self.assertContains(response, "Нажмите «Добавить запись»")
+        self.assertContains(response, "Кольцо сравнивает съеденное с Суточной целью")
+
+    def test_first_step_hint_is_gone_once_the_day_has_an_entry(self):
+        member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(member)
+        chicken = Product.objects.create(
+            name="Куриная грудка",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("165.0"),
+            proteins=Decimal("31.0"),
+            fats=Decimal("3.6"),
+            carbs=Decimal("0.0"),
+            author=member,
+        )
+        DiaryEntry.objects.create(
+            member=member,
+            date=datetime.date.today(),
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=chicken,
+            amount=Decimal("200"),
+        )
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertNotContains(response, "Начните с первой записи")
+
     def test_health_endpoint_is_available(self):
         response = self.client.get("/healthz")
 
@@ -183,6 +217,11 @@ class DayPageLanguageDTest(TestCase):
         self.assertNotContains(response, "pathLength")
         self.assertContains(response, reverse("core:daily_target_edit"))
         self.assertContains(response, "Цель не задана")
+        self.assertContains(response, "без Суточной цели кольцу не с чем сравнивать день")
+        self.assertContains(response, ">Задать цель<")
+        self.assertContains(
+            response, f'class="btn-main" href="{reverse("core:daily_target_edit")}"'
+        )
 
     def test_date_input_carries_current_day_and_arrows_switch_days(self):
         day = datetime.date(2026, 3, 10)
@@ -228,7 +267,7 @@ class DayPageLanguageDTest(TestCase):
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
         self.assertContains(response, 'aria-label="Изменить дату: 10/03/2026"')
-        self.assertContains(response, 'aria-label="Копировать день"')
+        self.assertContains(response, ">Повторить день<")
         self.assertContains(response, 'aria-label="Предыдущий день"')
         self.assertContains(response, 'aria-label="Следующий день"')
 

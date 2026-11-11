@@ -12,7 +12,7 @@
                   aria-label="Изменить дату: {{ current_date|date:'d/m/Y' }}">{{ current_date|date:"d/m/Y" }}</button>
           <a class="date-copy" href="{% url 'core:diary_copy' current_date.isoformat %}"
              hx-get="{% url 'core:diary_copy' current_date.isoformat %}" hx-target="#sheet-body" hx-swap="innerHTML"
-             @click="openSheet($event)" aria-label="Копировать день">Копировать</a>
+             @click="openSheet($event)">Повторить день</a>
           <input x-ref="picker" class="date-native" type="date" value="{{ current_date.isoformat }}" aria-hidden="true" tabindex="-1"
                  onchange="if (this.value) location.href = '{% url 'core:day_on' '0000-00-00' %}'.replace('0000-00-00', this.value)">
         </div>
@@ -51,8 +51,8 @@
           </div>
           <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
         {% else %}
-          <p class="muted">Цель не задана</p>
-          <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+          <p class="muted mb-2">Цель не задана — без Суточной цели кольцу не с чем сравнивать день.</p>
+          <a class="btn-main" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
         {% endif %}
         {% if not rings %}<p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>{% endif %}
         <p class="muted is-size-7 mt-3">Ккал округлены до целых, БЖУ — до 0,1 г.</p>
@@ -60,6 +60,13 @@
     </div>
 
     <div class="feed-col">
+      {% if not meals %}
+        <div class="box mb-4">
+          <p class="has-text-weight-semibold mb-1">Начните с первой записи</p>
+          <p class="muted is-size-7 mb-2">Нажмите «Добавить запись», выберите продукт из каталога или отсканируйте штрихкод. Записи можно разложить по Приёмам пищи — от Завтрака до Ужина.</p>
+          <p class="muted is-size-7 mb-0">Кольцо сравнивает съеденное с Суточной целью — дневным ориентиром по КБЖУ.</p>
+        </div>
+      {% endif %}
       <div class="timeline">
         {% for row in meal_rows %}
           <div class="meal-row{% if not row.entries %} is-empty{% endif %}">
@@ -84,7 +91,7 @@
                   <a class="add-meal" href="{% url 'core:entry_create' current_date.isoformat %}?{% query_string meal=row.type %}"
                      hx-get="{% url 'core:entry_create' current_date.isoformat %}" hx-vals="{% hx_vals meal=row.type %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)"><span class="muted">+ добавить</span></a>
                   <a class="add-meal" href="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}"
-                     hx-get="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Повторить</a>
+                     hx-get="{% url 'core:diary_copy' current_date.isoformat %}?meal={{ row.type }}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Повторить приём</a>
                 </div>
               </div>
             {% else %}
