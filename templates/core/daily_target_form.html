@@ -3,56 +3,60 @@
 
 {% block content %}
   <div class="page-head"><h1 class="title is-3">Суточная цель</h1></div>
-  {% if not has_target %}
-    <p class="muted mb-4">Цель не задана. Задайте — и на странице дня появятся кольца прогресса.</p>
-  {% endif %}
+  {% partialdef form inline %}
+    {% if request.htmx %}<h2 class="title is-4 mb-3">Суточная цель</h2>{% endif %}
+    {% if not has_target %}
+      <p class="muted mb-4">Цель не задана. Задайте — и на странице дня появятся кольца прогресса.</p>
+    {% endif %}
 
-  <form method="post" class="box"
-        x-data="{
-          k: '{{ form.calories.value|default_if_none:''|unlocalize|escapejs }}',
-          p: '{{ form.proteins.value|default_if_none:''|unlocalize|escapejs }}',
-          f: '{{ form.fats.value|default_if_none:''|unlocalize|escapejs }}',
-          c: '{{ form.carbs.value|default_if_none:''|unlocalize|escapejs }}',
-          kcal() {
-            const n = (v) => parseFloat(String(v).replace(',', '.'));
-            const [p, f, c] = [n(this.p), n(this.f), n(this.c)];
-            if ([p, f, c].some(Number.isNaN)) return null;
-            return Math.round(p * 4 + f * 9 + c * 4);
-          },
-        }">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-    <label class="goal-row" for="id_calories">
-      <span class="lbl"><span class="dot" style="background: var(--kcal)"></span>Калории</span>
-      <input type="text" inputmode="decimal" name="calories" id="id_calories" value="{{ form.calories.value|default_if_none:''|unlocalize }}" x-model="k" required>
-      <span class="unit">ккал</span>
-    </label>
-    {% for error in form.calories.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
-    <label class="goal-row" for="id_proteins">
-      <span class="lbl"><span class="dot" style="background: var(--p)"></span>Белки</span>
-      <input type="text" inputmode="decimal" name="proteins" id="id_proteins" value="{{ form.proteins.value|default_if_none:''|unlocalize }}" x-model="p" required>
-      <span class="unit">г</span>
-    </label>
-    {% for error in form.proteins.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
-    <label class="goal-row" for="id_fats">
-      <span class="lbl"><span class="dot" style="background: var(--f)"></span>Жиры</span>
-      <input type="text" inputmode="decimal" name="fats" id="id_fats" value="{{ form.fats.value|default_if_none:''|unlocalize }}" x-model="f" required>
-      <span class="unit">г</span>
-    </label>
-    {% for error in form.fats.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
-    <label class="goal-row" for="id_carbs">
-      <span class="lbl"><span class="dot" style="background: var(--c)"></span>Углеводы</span>
-      <input type="text" inputmode="decimal" name="carbs" id="id_carbs" value="{{ form.carbs.value|default_if_none:''|unlocalize }}" x-model="c" required>
-      <span class="unit">г</span>
-    </label>
-    {% for error in form.carbs.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+    <form method="post" class="box"
+          {% if request.htmx %}hx-post="{{ request.path }}" hx-target="#sheet-body" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]"{% endif %}
+          x-data="{
+            k: '{{ form.calories.value|default_if_none:''|localize|escapejs }}',
+            p: '{{ form.proteins.value|default_if_none:''|localize|escapejs }}',
+            f: '{{ form.fats.value|default_if_none:''|localize|escapejs }}',
+            c: '{{ form.carbs.value|default_if_none:''|localize|escapejs }}',
+            kcal() {
+              const n = (v) => parseFloat(String(v).replace(',', '.'));
+              const [p, f, c] = [n(this.p), n(this.f), n(this.c)];
+              if ([p, f, c].some(Number.isNaN)) return null;
+              return Math.round(p * 4 + f * 9 + c * 4);
+            },
+          }">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label class="goal-row" for="id_calories">
+        <span class="lbl"><span class="dot" style="background: var(--kcal)"></span>Калории</span>
+        <input type="text" inputmode="decimal" name="calories" id="id_calories" value="{{ form.calories.value|default_if_none:''|localize }}" x-model="k" required>
+        <span class="unit">ккал</span>
+      </label>
+      {% for error in form.calories.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+      <label class="goal-row" for="id_proteins">
+        <span class="lbl"><span class="dot" style="background: var(--p)"></span>Белки</span>
+        <input type="text" inputmode="decimal" name="proteins" id="id_proteins" value="{{ form.proteins.value|default_if_none:''|localize }}" x-model="p" required>
+        <span class="unit">г</span>
+      </label>
+      {% for error in form.proteins.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+      <label class="goal-row" for="id_fats">
+        <span class="lbl"><span class="dot" style="background: var(--f)"></span>Жиры</span>
+        <input type="text" inputmode="decimal" name="fats" id="id_fats" value="{{ form.fats.value|default_if_none:''|localize }}" x-model="f" required>
+        <span class="unit">г</span>
+      </label>
+      {% for error in form.fats.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
+      <label class="goal-row" for="id_carbs">
+        <span class="lbl"><span class="dot" style="background: var(--c)"></span>Углеводы</span>
+        <input type="text" inputmode="decimal" name="carbs" id="id_carbs" value="{{ form.carbs.value|default_if_none:''|localize }}" x-model="c" required>
+        <span class="unit">г</span>
+      </label>
+      {% for error in form.carbs.errors %}<p class="is-size-7 has-text-danger">{{ error }}</p>{% endfor %}
 
-    <p class="is-size-7 muted mt-2"{% if not macro_kcal %} x-show="kcal() !== null" x-cloak style="display: none"{% endif %}>
-      По БЖУ выходит ≈ <b class="num" x-text="kcal() ?? '{{ macro_kcal|default:''|floatformat:0 }}'">{{ macro_kcal|floatformat:0 }}</b> ккал
-      <a href="#" class="ml-2" x-show="kcal() !== null && kcal() != parseFloat(String(k).replace(',', '.'))" @click.prevent="k = kcal()">подставить</a>
-    </p>
+      <p class="is-size-7 muted mt-2"{% if not macro_kcal %} x-show="kcal() !== null" x-cloak style="display: none"{% endif %}>
+        По БЖУ выходит ≈ <b class="num" x-text="kcal() ?? '{{ macro_kcal|default:''|floatformat:0 }}'">{{ macro_kcal|floatformat:0 }}</b> ккал
+        <a href="#" class="ml-2" x-show="kcal() !== null && kcal() != parseFloat(String(k).replace(',', '.'))" @click.prevent="k = String(kcal()).replace('.', ',')">подставить</a>
+      </p>
 
-    <button class="btn-quiet mt-4" type="submit">Сохранить</button>
-  </form>
+      <button class="{% if request.htmx %}btn-main{% else %}btn-quiet{% endif %} mt-4" type="submit">Сохранить</button>
+    </form>
+  {% endpartialdef %}
   <p><a href="{{ cancel_url }}">Отмена</a></p>
 {% endblock %}

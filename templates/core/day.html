@@ -2,9 +2,9 @@
 {% load nutrition carry %}
 
 {% block content %}
-  <div class="day-layout" x-data="sheetHost" @keydown.escape.window="closeSheet()" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
+  <div class="day-layout" x-data="sheetHost" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
     <div class="datebar">
-      <a class="date-step" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день">{% include "components/icons/chevron-left.html" %}</a>
+      <a class="date-step{% if previous_has_entries %} has-entries{% endif %}" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день{% if previous_has_entries %}, есть записи{% endif %}">{% include "components/icons/chevron-left.html" %}{% if previous_has_entries %}<span class="date-step-mark" aria-hidden="true"></span>{% endif %}</a>
       <div class="day">
         <h1 class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}<span class="is-sr-only">, {{ current_date|date:"j E Y" }}</span></h1>
         <div class="date-actions" x-data>
@@ -17,7 +17,7 @@
                  onchange="if (this.value) location.href = '{% url 'core:day_on' '0000-00-00' %}'.replace('0000-00-00', this.value)">
         </div>
       </div>
-      <a class="date-step date-step-next" href="{% url 'core:day_on' next_date.isoformat %}" aria-label="Следующий день">{% include "components/icons/chevron-left.html" %}</a>
+      <a class="date-step date-step-next{% if next_has_entries %} has-entries{% endif %}" href="{% url 'core:day_on' next_date.isoformat %}" aria-label="Следующий день{% if next_has_entries %}, есть записи{% endif %}">{% include "components/icons/chevron-left.html" %}{% if next_has_entries %}<span class="date-step-mark" aria-hidden="true"></span>{% endif %}</a>
     </div>
   {% partialdef feed inline %}
   <div id="feed" class="feed-block">
@@ -42,6 +42,15 @@
       <div id="day-summary" class="box summary summary-full has-text-centered" title="Ккал округлены до целых, БЖУ — до 0,1 г.">
         {% include "components/day_summary.html" %}
       </div>
+      <details class="day-help">
+        <summary class="day-help-toggle">Как вести дневник</summary>
+        <ul class="day-help-list">
+          <li><b>Кольцо</b> сравнивает съеденное с Суточной целью: «осталось» — сколько ещё влезает в день.</li>
+          <li><b>Приёмы пищи</b> — пять слотов от Завтрака до Ужина; «+ добавить» в строке открывает нужный слот.</li>
+          <li><b>Повторить</b> день, приём или запись переносит записи в выбранный день, исходный не меняется.</li>
+          <li><b>Ккал округлены</b> до целых, БЖУ — до 0,1 г; расчёт идёт по Снапшоту записи.</li>
+        </ul>
+      </details>
     </div>
 
     <div class="feed-col">

@@ -294,7 +294,8 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, '<b class="over-goal">30 ккал</b> сверх цели')
         self.assertContains(response, 'class="muted num over-goal">· 30 ккал сверх цели')
         self.assertContains(response, 'stroke="var(--over-goal)"')
-        self.assertNotContains(response, "danger")
+        self.assertNotContains(response, "has-text-danger")
+        self.assertNotContains(response, "var(--bulma-danger)")
         self.assertNotContains(response, "сверх на")
 
     def test_over_macro_goal_is_amber_not_danger_red(self):
@@ -305,7 +306,8 @@ class DayPageLanguageDTest(TestCase):
 
         self.assertContains(response, 'aria-label="Белки: 62,0 из 10,0 граммов"')
         self.assertContains(response, 'stroke="var(--over-goal)"', count=1)
-        self.assertNotContains(response, "danger")
+        self.assertNotContains(response, "has-text-danger")
+        self.assertNotContains(response, "var(--bulma-danger)")
 
     def test_under_target_has_no_over_goal_ring(self):
         self._target()
@@ -392,3 +394,68 @@ class DayPageLanguageDTest(TestCase):
         response = self.client.get(reverse("core:day"))
 
         self.assertContains(response, 'id="feed"', count=1)
+
+    def test_date_arrows_point_at_neighbouring_days_with_entries(self):
+        self._eat()
+        DiaryEntry.objects.create(
+            member=self.member,
+            date=self.today - datetime.timedelta(days=1),
+            meal_type=DiaryEntry.MealType.BREAKFAST,
+            product=self.chicken,
+            amount=Decimal("100"),
+        )
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, 'class="date-step has-entries"')
+        self.assertContains(response, 'aria-label="Предыдущий день, есть записи"')
+        self.assertContains(response, 'class="date-step-mark"', count=1)
+        self.assertContains(response, 'aria-label="Следующий день"')
+
+    def test_date_arrows_stay_quiet_when_neighbouring_days_are_empty(self):
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertNotContains(response, "date-step-mark")
+        self.assertNotContains(response, "has-entries")
+
+    def test_macro_rings_show_how_much_is_left_like_the_kcal_ring(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, "осталось 58,0 г")
+        self.assertContains(response, "осталось 62,8 г")
+        self.assertContains(response, "осталось 220,0 г")
+
+    def test_over_macro_goal_shows_excess_without_repeating_the_goal(self):
+        self._target(proteins="10")
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, 'class="is-size-7 over-goal unit-pair">сверх 52,0 г')
+
+    def test_persistent_help_is_available_on_empty_and_filled_days(self):
+        empty = self.client.get(reverse("core:day"))
+        self._eat()
+        filled = self.client.get(reverse("core:day"))
+
+        for response in (empty, filled):
+            self.assertContains(response, '<details class="day-help">')
+            self.assertContains(response, "Как вести дневник")
+            self.assertContains(response, "расчёт идёт по Снапшоту записи")
+
+    def test_target_actions_open_the_sheet_instead_of_a_separate_page(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        content = response.content.decode()
+        summary = content[content.index('id="day-summary"') : content.index('class="timeline"')]
+        self.assertIn(f'hx-get="{reverse("core:daily_target_edit")}"', summary)
+        self.assertIn('hx-target="#sheet-body"', summary)
+        self.assertIn("openSheet($event)", summary)

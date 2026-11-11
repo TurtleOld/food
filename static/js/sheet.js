@@ -17,11 +17,13 @@ document.addEventListener("alpine:init", () => {
     error: false,
     retryable: false,
     dirty: false,
+    confirming: false,
     opener: null,
     inerted: [],
     _request: 0,
     _pending: null,
     _retry: null,
+    _confirmReturn: null,
 
     init() {
       // `$el` в обработчике указывает на кликнутый элемент, поэтому корень
@@ -57,10 +59,20 @@ document.addEventListener("alpine:init", () => {
       };
       document.body.addEventListener("htmx:response-error", markSheetError);
       document.body.addEventListener("htmx:send-error", markSheetError);
+      // Escape закрывает шторку на любой странице, а открытое подтверждение
+      // сначала отменяется: иначе один Esc закрыл бы форму мимо вопроса.
+      this.onKeydown = (event) => {
+        if (event.key !== "Escape" || !this.sheetOpen) return;
+        event.preventDefault();
+        if (this.confirming) this.cancelClose();
+        else this.closeSheet();
+      };
+      document.addEventListener("keydown", this.onKeydown);
     },
 
     destroy() {
       document.removeEventListener("htmx:afterSwap", this.onAfterSwap);
+      document.removeEventListener("keydown", this.onKeydown);
       this.setBackgroundInert(false);
     },
 
@@ -76,22 +88,42 @@ document.addEventListener("alpine:init", () => {
       this.error = false;
       this.retryable = false;
       this.dirty = false;
+      this.confirming = false;
       this.setBackgroundInert(true);
       this.$nextTick(() => this.focusInside());
     },
 
-    closeSheet(force = false) {
-      const active = document.activeElement;
-      if (!force && this.dirty && !confirm("Закрыть без сохранения?")) {
-        // Отказ от закрытия не должен выбрасывать фокус из формы.
-        if (active?.closest("form") && this.sheet?.contains(active)) active.focus();
+    // Несохранённые правки подтверждаются в самой шторке: нативный confirm
+    // выпадает из языка интерфейса и не даёт вернуть фокус в форму.
+    askClose() {
+      this._confirmReturn = this.sheet?.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+      this.confirming = true;
+      this.$nextTick(() => this.$refs.confirmKeep?.focus());
+    },
+
+    cancelClose() {
+      const back = this._confirmReturn;
+      this._confirmReturn = null;
+      this.confirming = false;
+      this.$nextTick(() => {
+        if (back?.isConnected) back.focus();
         else this.focusInside();
+      });
+    },
+
+    closeSheet(force = false) {
+      if (!force && this.dirty) {
+        this.askClose();
         return;
       }
       this.sheetOpen = false;
       this.error = false;
       this.retryable = false;
       this.dirty = false;
+      this.confirming = false;
+      this._confirmReturn = null;
       this.setBackgroundInert(false);
       const opener = this.opener;
       this.opener = null;

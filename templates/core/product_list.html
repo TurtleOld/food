@@ -2,7 +2,7 @@
 {% load nutrition %}
 
 {% block content %}
-  <div class="catalog" x-data="sheetHost" @keydown.escape.window="closeSheet()" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
+  <div class="catalog" x-data="sheetHost" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
     <h1 class="title is-3 mb-4">Продукты</h1>
 
     <form class="findbar" method="get" action="{% url 'core:product_list' %}"
