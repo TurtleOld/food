@@ -18,7 +18,7 @@
   </div>
   <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
 {% else %}
-  <p class="muted">Цель не задана</p>
-  <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+  <p class="muted mb-2">Цель не задана — без Суточной цели кольцу не с чем сравнивать день.</p>
+  <a class="btn-main mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
   <p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>
 {% endif %}

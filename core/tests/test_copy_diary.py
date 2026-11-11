@@ -98,7 +98,30 @@ class CopyEntryPointTests(CopyBase):
 
         self.assertContains(page, self.copy_url())
         self.assertContains(page, f"{self.copy_url()}?meal=lunch")
-        self.assertContains(page, "Копировать")
+        self.assertContains(page, "Повторить день")
+        self.assertContains(page, "Повторить приём")
+
+    def test_three_copy_mechanics_share_one_verb_and_differ_only_by_object(self):
+        entry = self.eat(self.member, self.chicken, "100", self.source, DiaryEntry.MealType.LUNCH)
+
+        day = self.client.get(reverse("core:day_on", args=[self.source.isoformat()]))
+        entry_sheet = self.client.get(reverse("core:entry_edit", args=[entry.pk]), headers=HTMX)
+        day_copy = self.client.get(self.copy_url())
+        meal_copy = self.client.get(f"{self.copy_url()}?meal=lunch")
+        entry_copy = self.client.get(f"{self.copy_url()}?entry={entry.pk}")
+
+        for page, label in (
+            (day, "Повторить день"),
+            (day, "Повторить приём"),
+            (entry_sheet, "Повторить запись"),
+            (day_copy, "Повторить день"),
+            (meal_copy, "Повторить приём"),
+            (entry_copy, "Повторить запись"),
+        ):
+            self.assertContains(page, label)
+        for page in (day, entry_sheet, day_copy, meal_copy, entry_copy):
+            self.assertNotContains(page, "Копировать")
+            self.assertNotContains(page, "Скопировать")
 
     def test_copy_page_is_a_plain_page_without_htmx_and_a_sheet_step_with_it(self):
         plain = self.client.get(self.copy_url())
@@ -116,6 +139,7 @@ class CopyEntryPointTests(CopyBase):
         page = self.client.get(reverse("core:entry_edit", args=[entry.pk]), headers=HTMX)
 
         self.assertContains(page, f"{self.copy_url()}?entry={entry.pk}")
+        self.assertContains(page, "Повторить запись")
 
     def test_meal_copy_page_names_the_chosen_meal(self):
         page = self.client.get(f"{self.copy_url()}?meal=lunch")
@@ -362,6 +386,7 @@ class CopyEntryTests(CopyBase):
         self.assertContains(page, f'value="{entry.pk}"')
         self.assertContains(page, 'value="dinner"')
         self.assertContains(page, "checked")
+        self.assertContains(page, ">Повторить запись</button>")
 
     def test_another_members_entry_cannot_be_opened_or_copied(self):
         foreign = self.eat(self.other, self.chicken, "120", self.source)

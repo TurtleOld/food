@@ -164,12 +164,12 @@ class DayView(HtmxLoginRequiredMixin, FragmentMixin, TemplateView):
 
 _COPY_TITLES: dict[str, tuple[str, str]] = {
     DiaryCopyForm.Scope.DAY.value: (
-        "Копировать день",
+        "Повторить день",
         "Все записи исходного дня добавятся в целевой.",
     ),
     DiaryCopyForm.Scope.MEAL.value: ("Повторить приём", "Записи приёма добавятся в целевой день."),
     DiaryCopyForm.Scope.ENTRY.value: (
-        "Скопировать запись",
+        "Повторить запись",
         "Запись добавится в выбранный день и приём пищи.",
     ),
 }
@@ -292,9 +292,7 @@ class DiaryCopyView(HtmxLoginRequiredMixin, View):
         if duplicate:
             messages.info(request, "Это копирование уже выполнено")
             return self._complete(request, target)
-        add_undo_message(
-            request, f"Скопировано записей: {len(entries)}", copy_token(entries, target)
-        )
+        add_undo_message(request, f"Добавлено записей: {len(entries)}", copy_token(entries, target))
         return self._complete(request, target)
 
 

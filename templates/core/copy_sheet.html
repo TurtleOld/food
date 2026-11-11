@@ -40,7 +40,7 @@
           {% for error in form.target_meal_type.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
         {% endif %}
 
-        <button class="btn-main mt-5" type="submit" hx-disabled-elt="this">Скопировать</button>
+        <button class="btn-main mt-5" type="submit" hx-disabled-elt="this">{{ title }}</button>
       </form>
     </div>
   {% endpartialdef %}
