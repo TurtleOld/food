@@ -741,6 +741,23 @@ body {
   color: var(--bulma-text-weak);
 }
 
+/* Adding is the meal's one explicit action; «Повторить» stays a quiet
+   secondary link so the two do not compete. */
+.meal-add {
+  color: var(--bulma-text-strong);
+  font-weight: 600;
+}
+
+.meal-repeat {
+  font-size: 0.8rem;
+}
+
+.meal-actions .add-meal {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .add-meal:hover {
   color: var(--bulma-text-strong);
 }

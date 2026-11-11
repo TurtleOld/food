@@ -151,13 +151,37 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Б 46,5 г")
-        self.assertContains(response, "Ж 5,4 г")
-        self.assertContains(response, "У 0,0 г")
-        self.assertContains(response, "150,0 г")
+        self.assertContains(response, "Б 46,5&nbsp;г")
+        self.assertContains(response, "Ж 5,4&nbsp;г")
+        self.assertContains(response, "У 0,0&nbsp;г")
+        self.assertContains(response, "150 г")
         self.assertContains(response, "Ккал округлены до целых, БЖУ — до 0,1 г.")
         self.assertNotContains(response, "46.5")
         self.assertNotContains(response, "5.4")
+
+    def test_feed_row_shows_name_amount_and_kcal_without_macros(self):
+        self._target()
+        self._eat("150")
+
+        response = self.client.get(reverse("core:day"))
+
+        match = re.search(r'<a class="entry".*?</a>', response.content.decode(), re.S)
+        self.assertIsNotNone(match)
+        row = match.group() if match else ""
+        self.assertIn("Куриная грудка", row)
+        self.assertIn('<span class="unit-pair">150 г</span>', row)
+        self.assertIn("248 <small", row)
+        self.assertNotIn("Б ", row)
+        self.assertNotIn("Ж ", row)
+        self.assertNotIn("У ", row)
+
+    def test_repeat_is_marked_secondary_while_add_stays_explicit(self):
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, 'class="add-meal meal-add"', count=1)
+        self.assertContains(response, 'class="add-meal meal-repeat"', count=1)
 
     def test_over_target_shows_excess_and_danger_ring(self):
         self._target(calories="300")
