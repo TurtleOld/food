@@ -145,6 +145,30 @@ class DayPageLanguageDTest(TestCase):
         ]
         self.assertEqual(positions, sorted(positions))
 
+    def test_every_ring_names_its_value_and_daily_goal(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        for label in (
+            "Калории: 330 из 2000 ккал",
+            "Белки: 62,0 из 120,0 граммов",
+            "Жиры: 7,2 из 70,0 граммов",
+            "Углеводы: 0,0 из 220,0 граммов",
+        ):
+            self.assertContains(response, f'aria-label="{label}"')
+        self.assertContains(response, 'class="ring-label" aria-hidden="true"', count=4)
+
+    def test_rings_draw_with_the_shared_nutrient_palette(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        for color in ("var(--kcal)", "var(--p)", "var(--f)", "var(--c)"):
+            self.assertContains(response, f'stroke="{color}"')
+
     def test_fractional_macros_keep_one_decimal_with_comma_and_grams(self):
         self._target()
         self._eat("150")
