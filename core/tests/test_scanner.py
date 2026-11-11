@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.staticfiles import finders
 from django.urls import reverse
 
@@ -19,6 +21,15 @@ class ScannerEntryPointTests(SheetAddBase):
         self.assertContains(response, "muted")
         self.assertContains(response, 'accept="image/*"')
         self.assertContains(response, 'capture="environment"')
+
+    def test_scan_strip_uses_an_icon_instead_of_an_emoji(self):
+        response = self.client.get(self.create_url, {"scan": "1"}, headers=HTMX)
+
+        photo = re.search(r'<label class="scan-photo">.*?</label>', response.content.decode(), re.S)
+        assert photo is not None
+
+        self.assertNotContains(response, "📷")
+        self.assertIn("<svg", photo.group(0))
 
     def test_plain_entry_has_the_scan_toggle_but_starts_only_on_tap(self):
         response = self.client.get(self.create_url, headers=HTMX)

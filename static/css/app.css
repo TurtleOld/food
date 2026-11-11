@@ -294,7 +294,7 @@ body {
   display: grid;
   justify-items: center;
   gap: 0.1rem;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: var(--bulma-text-weak);
 }
 
@@ -362,18 +362,15 @@ body {
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   background: var(--bulma-scheme-main);
   color: var(--bulma-text-strong);
   box-shadow: var(--soft-shadow);
   border-radius: var(--bulma-radius);
   padding: 0.75rem 1rem;
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  justify-content: space-between;
 }
 
 .toast.is-error {
@@ -603,15 +600,7 @@ body {
 
 .btn-main.quick-add-action {
   flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
   width: auto;
-  min-height: 3rem;
-  border-radius: 999px;
-  text-align: center;
-  box-shadow: var(--soft-shadow);
 }
 
 .quick-add-action .icon {
@@ -846,8 +835,12 @@ body:has(.login) {
 }
 
 .btn-main {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   width: 100%;
+  min-height: 3rem;
   border: 0;
   cursor: pointer;
   background: var(--kcal);
@@ -855,7 +848,8 @@ body:has(.login) {
   font: inherit;
   font-weight: 600;
   padding: 0.85rem 1rem;
-  border-radius: var(--bulma-radius);
+  border-radius: 999px;
+  box-shadow: var(--soft-shadow);
 }
 
 .login {
@@ -1171,6 +1165,9 @@ body:has(.login) {
 .scan-off,
 .scan-photo {
   all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   cursor: pointer;
   position: absolute;
   right: 0.5rem;

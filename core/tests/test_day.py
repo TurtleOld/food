@@ -184,6 +184,15 @@ class DayPageLanguageDTest(TestCase):
         self.assertContains(response, reverse("core:daily_target_edit"))
         self.assertContains(response, "Цель не задана")
 
+    def test_date_button_falls_back_when_show_picker_is_missing(self):
+        response = self.client.get(reverse("core:day"))
+
+        button = re.search(r'<button[^>]*class="date-pick"[^>]*>', response.content.decode())
+        assert button is not None
+
+        self.assertIn("showPicker", button.group(0))
+        self.assertIn(".click()", button.group(0))
+
     def test_date_input_carries_current_day_and_arrows_switch_days(self):
         day = datetime.date(2026, 3, 10)
 

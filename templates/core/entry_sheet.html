@@ -97,7 +97,7 @@
   {% endif %}
   </div>
   {% if not bind %}{% include "components/scanner_strip.html" with field="input[name=q]" where="в поиск" %}{% endif %}
-  <p id="search-wait" class="muted is-size-7 mt-2" hidden>⏳ Ищем <span id="search-wait-query"></span> в каталоге и Open Food Facts</p>
+  <p id="search-wait" class="muted is-size-7 mt-2" hidden>{% include "components/icons/search.html" %} Ищем <span id="search-wait-query"></span> в каталоге и Open Food Facts</p>
   <div class="mt-4">
     {% include "core/entry_sheet.html#results" with query="" products=None meal=meal hour=hour bind=bind %}
   </div>
@@ -154,6 +154,6 @@
   </label>
   {% for error in form.date.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
 
-  <button class="button is-primary is-fullwidth mt-5" type="submit"><span x-text="'Добавить в ' + meal">Добавить в {{ meal_label|lower }}</span></button>
+  <button class="btn-main mt-5" type="submit"><span x-text="'Добавить в ' + meal">Добавить в {{ meal_label|lower }}</span></button>
 </form>
 {% endpartialdef %}
