@@ -99,11 +99,56 @@ class DayPageLanguageDTest(TestCase):
 
         self.assertContains(without_target, "330 ккал</b>")
         self.assertContains(without_target, "Б 62,0 г")
-        self.assertContains(with_target, 'class="day-glance"')
-        self.assertContains(with_target, "330&nbsp;ккал")
-        self.assertContains(with_target, "&nbsp;г", count=3)
+        self.assertContains(without_target, "· цель не задана")
+        self.assertContains(with_target, 'class="summary summary-brief"')
+        self.assertContains(with_target, "330</b> / 2000 ккал")
         self.assertNotContains(with_target, "330 ккал</b>")
-        self.assertContains(with_target, "Ккал округлены до целых, БЖУ — до 0,1 г.")
+
+    def test_mobile_brief_controls_the_full_summary_and_sits_before_the_feed(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        content = response.content.decode()
+        brief_start = content.index('class="summary summary-brief"')
+        summary_start = content.index('id="day-summary"')
+        brief = content[brief_start:summary_start]
+        summary = content[summary_start : content.index('class="timeline"')]
+        self.assertLess(brief_start, summary_start)
+        self.assertLess(summary_start, content.index('class="timeline"'))
+        self.assertIn('aria-controls="day-summary"', brief)
+        self.assertIn("330</b> / 2000 ккал", brief)
+        self.assertIn("· осталось 1670 ккал", brief)
+        self.assertIn('class="ring"', summary)
+        self.assertIn("из 2000 ккал", summary)
+        self.assertIn("Осталось <b", summary)
+        self.assertIn(reverse("core:daily_target_edit"), summary)
+
+    def test_desktop_summary_keeps_the_rings_and_the_target_action(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(
+            response, 'id="day-summary" class="box summary summary-full has-text-centered"'
+        )
+        self.assertContains(response, "из 2000 ккал")
+        self.assertContains(response, "Осталось <b")
+        self.assertContains(response, "Б · 120,0 г")
+        self.assertContains(response, "Ж · 70,0 г")
+        self.assertContains(response, "У · 220,0 г")
+        self.assertContains(response, "Изменить цель")
+
+    def test_rounding_note_is_a_tooltip_instead_of_permanent_footnote(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertNotContains(response, ">Ккал округлены до целых, БЖУ — до 0,1 г.<")
+        self.assertContains(response, 'title="Ккал округлены до целых, БЖУ — до 0,1 г."', count=1)
 
     def test_entry_row_is_a_single_link_to_edit_page_without_icons(self):
         entry = self._eat()
@@ -145,19 +190,66 @@ class DayPageLanguageDTest(TestCase):
         ]
         self.assertEqual(positions, sorted(positions))
 
+    def test_every_ring_names_its_value_and_daily_goal(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        for label in (
+            "Калории: 330 из 2000 ккал",
+            "Белки: 62,0 из 120,0 граммов",
+            "Жиры: 7,2 из 70,0 граммов",
+            "Углеводы: 0,0 из 220,0 граммов",
+        ):
+            self.assertContains(response, f'aria-label="{label}"')
+        self.assertContains(response, 'class="ring-label" aria-hidden="true"', count=4)
+
+    def test_rings_draw_with_the_shared_nutrient_palette(self):
+        self._target()
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        for color in ("var(--kcal)", "var(--p)", "var(--f)", "var(--c)"):
+            self.assertContains(response, f'stroke="{color}"')
+
     def test_fractional_macros_keep_one_decimal_with_comma_and_grams(self):
         self._target()
         self._eat("150")
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "Б 46,5 г")
-        self.assertContains(response, "Ж 5,4 г")
-        self.assertContains(response, "У 0,0 г")
-        self.assertContains(response, "150,0 г")
-        self.assertContains(response, "Ккал округлены до целых, БЖУ — до 0,1 г.")
+        self.assertContains(response, 'aria-label="Белки: 46,5 из 120,0 граммов"')
+        self.assertContains(response, 'aria-label="Жиры: 5,4 из 70,0 граммов"')
+        self.assertContains(response, 'aria-label="Углеводы: 0,0 из 220,0 граммов"')
+        self.assertContains(response, "150 г")
         self.assertNotContains(response, "46.5")
         self.assertNotContains(response, "5.4")
+
+    def test_feed_row_shows_name_amount_and_kcal_without_macros(self):
+        self._target()
+        self._eat("150")
+
+        response = self.client.get(reverse("core:day"))
+
+        match = re.search(r'<a class="entry".*?</a>', response.content.decode(), re.S)
+        self.assertIsNotNone(match)
+        row = match.group() if match else ""
+        self.assertIn("Куриная грудка", row)
+        self.assertIn('<span class="unit-pair">150 г</span>', row)
+        self.assertIn("248 <small", row)
+        self.assertNotIn("Б ", row)
+        self.assertNotIn("Ж ", row)
+        self.assertNotIn("У ", row)
+
+    def test_repeat_is_marked_secondary_while_add_stays_explicit(self):
+        self._eat()
+
+        response = self.client.get(reverse("core:day"))
+
+        self.assertContains(response, 'class="add-meal meal-add"', count=1)
+        self.assertContains(response, 'class="add-meal meal-repeat"', count=1)
 
     def test_over_target_shows_amber_excess_without_danger_red(self):
         self._target(calories="300")
@@ -166,9 +258,10 @@ class DayPageLanguageDTest(TestCase):
         response = self.client.get(reverse("core:day"))
 
         self.assertContains(response, '<b class="over-goal">30 ккал</b> сверх цели')
+        self.assertContains(response, 'class="muted num over-goal">· 30 ккал сверх цели')
         self.assertContains(response, 'stroke="var(--over-goal)"')
         self.assertNotContains(response, "danger")
-        self.assertNotContains(response, "Сверх цели на")
+        self.assertNotContains(response, "сверх на")
 
     def test_over_macro_goal_is_amber_not_danger_red(self):
         self._target(proteins="10")
@@ -176,7 +269,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day"))
 
-        self.assertContains(response, "62,0 г")
+        self.assertContains(response, 'aria-label="Белки: 62,0 из 10,0 граммов"')
         self.assertContains(response, 'stroke="var(--over-goal)"', count=1)
         self.assertNotContains(response, "danger")
 
@@ -188,6 +281,7 @@ class DayPageLanguageDTest(TestCase):
 
         self.assertNotContains(response, 'stroke="var(--over-goal)"')
         self.assertContains(response, "Осталось <b")
+        self.assertContains(response, "· осталось 1670 ккал")
 
     def test_without_target_there_are_no_rings_and_goal_is_suggested(self):
         response = self.client.get(reverse("core:day"))
