@@ -376,18 +376,33 @@ class DayPageLanguageDTest(TestCase):
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
         self.assertContains(response, f'data-selected="{day.isoformat()}"')
-        self.assertContains(response, date_format(day, "j E Y"))
+        self.assertContains(response, date_format(day, "d-m-Y"))
         self.assertContains(response, "Овсянка")
         self.assertNotContains(response, "Куриная грудка")
 
-    def test_date_input_carries_current_day_and_arrows_switch_days(self):
+    def test_date_button_carries_current_day_in_dd_mm_yyyy_and_arrows_switch_days(self):
         day = datetime.date(2026, 3, 10)
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, "10.03.2026")
+        self.assertContains(response, "<span>10-03-2026</span>")
         self.assertContains(response, reverse("core:day_on", args=["2026-03-09"]))
         self.assertContains(response, reverse("core:day_on", args=["2026-03-11"]))
+
+    def test_calendar_week_starts_on_monday_with_russian_short_names(self):
+        response = self.client.get(reverse("core:day"))
+
+        row = re.search(
+            r'<div class="calendar-weekdays"[^>]*>(.*?)</div>',
+            response.content.decode(),
+            re.S,
+        )
+        assert row is not None
+
+        self.assertEqual(
+            re.findall(r"<span>([^<]+)</span>", row.group(1)),
+            ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+        )
 
     def test_day_page_has_one_main_heading_naming_today_and_its_date(self):
         response = self.client.get(reverse("core:day"))
@@ -396,7 +411,7 @@ class DayPageLanguageDTest(TestCase):
         self.assertRegex(
             response.content.decode(),
             r"<h1\b[^>]*>Сегодня<span\b[^>]*>, "
-            f"{re.escape(date_format(self.today, 'j E Y'))}</span></h1>",
+            f"{re.escape(date_format(self.today, 'd-m-Y'))}</span></h1>",
         )
 
     def test_past_day_main_heading_names_the_weekday_and_date(self):
@@ -407,7 +422,7 @@ class DayPageLanguageDTest(TestCase):
         self.assertRegex(
             response.content.decode(),
             rf"<h1\b[^>]*>{re.escape(date_format(day, 'l'))}<span\b[^>]*>, "
-            f"{re.escape(date_format(day, 'j E Y'))}</span></h1>",
+            f"{re.escape(date_format(day, 'd-m-Y'))}</span></h1>",
         )
 
     def test_every_meal_is_an_h2_heading_on_empty_and_filled_days(self):
@@ -423,7 +438,7 @@ class DayPageLanguageDTest(TestCase):
 
         response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
 
-        self.assertContains(response, 'aria-label="Изменить дату: 10.03.2026"')
+        self.assertContains(response, 'aria-label="Изменить дату: 10-03-2026"')
         self.assertContains(response, 'aria-label="Повторить день"')
         self.assertContains(response, ">Повторить день<")
         self.assertContains(response, 'aria-label="Предыдущий день"')

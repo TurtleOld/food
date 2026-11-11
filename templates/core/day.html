@@ -6,7 +6,7 @@
     <div class="datebar">
       <a class="date-step{% if previous_has_entries %} has-entries{% endif %}" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день{% if previous_has_entries %}, есть записи{% endif %}">{% include "components/icons/chevron-left.html" %}{% if previous_has_entries %}<span class="date-step-mark" aria-hidden="true"></span>{% endif %}</a>
       <div class="day">
-        <h1 class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}<span class="is-sr-only">, {{ current_date|date:"j E Y" }}</span></h1>
+        <h1 class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}<span class="is-sr-only">, {{ current_date|date:"d-m-Y" }}</span></h1>
         <div class="date-actions" x-data="dateCalendar"
              data-selected="{{ current_date.isoformat }}" data-today="{{ today.isoformat }}"
              data-day-url="{% url 'core:day_on' '0000-00-00' %}"

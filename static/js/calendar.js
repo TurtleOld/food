@@ -2,6 +2,8 @@
 // нативный `<input type="date">`: showPicker() есть не во всех браузерах, а
 // скрытый input в старом Safari не открывался вообще. Здесь же можно дать
 // календарю понятные подписи, 44-пиксельные цели и клавиатурную сетку.
+// Русский формат даты фиксирован здесь, а не берётся из locale браузера:
+// подписи дней всегда DD-MM-YYYY; кнопка даты задаёт тот же формат в шаблоне.
 const MONTHS = [
   "Январь",
   "Февраль",
@@ -16,21 +18,6 @@ const MONTHS = [
   "Ноябрь",
   "Декабрь",
 ];
-const MONTHS_GENITIVE = [
-  "января",
-  "февраля",
-  "марта",
-  "апреля",
-  "мая",
-  "июня",
-  "июля",
-  "августа",
-  "сентября",
-  "октября",
-  "ноября",
-  "декабря",
-];
-const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const WEEKDAYS_FULL = [
   "понедельник",
   "вторник",
@@ -44,6 +31,8 @@ const WEEKDAYS_FULL = [
 const pad = (value) => String(value).padStart(2, "0");
 const toIso = (date) =>
   `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const formatDate = (date) =>
+  `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
 const fromIso = (value) => {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
@@ -53,7 +42,9 @@ const addDays = (date, days) => {
   next.setDate(next.getDate() + days);
   return next;
 };
-const mondayIndex = (date) => (date.getDay() + 6) % 7;
+// Неделя всегда начинается с понедельника, независимо от локали браузера.
+const WEEK_START = 1;
+const weekdayIndex = (date) => (date.getDay() - WEEK_START + 7) % 7;
 
 document.addEventListener("alpine:init", () => {
   Alpine.data("dateCalendar", () => ({
@@ -64,7 +55,6 @@ document.addEventListener("alpine:init", () => {
     viewYear: 0,
     viewMonth: 0,
     focusIso: "",
-    weekdays: WEEKDAYS_SHORT,
 
     init() {
       const data = this.$el.dataset;
@@ -95,7 +85,7 @@ document.addEventListener("alpine:init", () => {
     get cells() {
       // Сетка всегда шесть недель: высота календаря не прыгает при смене месяца.
       const first = new Date(this.viewYear, this.viewMonth, 1);
-      const start = addDays(first, -mondayIndex(first));
+      const start = addDays(first, -weekdayIndex(first));
       const tabbable = this.tabbableIso();
       return Array.from({ length: 42 }, (_, index) => {
         const date = addDays(start, index);
@@ -115,8 +105,8 @@ document.addEventListener("alpine:init", () => {
     },
 
     dayLabel(date, value) {
-      const weekday = WEEKDAYS_FULL[mondayIndex(date)];
-      let label = `${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()]} ${date.getFullYear()}, ${weekday}`;
+      const weekday = WEEKDAYS_FULL[weekdayIndex(date)];
+      let label = `${formatDate(date)}, ${weekday}`;
       if (value === this.today) label += ", сегодня";
       if (value === this.selected) label += ", выбранный день";
       return label;
@@ -205,10 +195,10 @@ document.addEventListener("alpine:init", () => {
           target = addDays(current, 7);
           break;
         case "Home":
-          target = addDays(current, -mondayIndex(current));
+          target = addDays(current, -weekdayIndex(current));
           break;
         case "End":
-          target = addDays(current, 6 - mondayIndex(current));
+          target = addDays(current, 6 - weekdayIndex(current));
           break;
         case "PageUp":
           target = this.shiftMonth(current, event.shiftKey ? -12 : -1);
