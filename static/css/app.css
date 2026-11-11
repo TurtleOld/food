@@ -537,8 +537,48 @@ body {
   margin-bottom: 1.5rem;
 }
 
-.day-glance {
+/* The phone folds the full summary into a one-line plaque that opens on tap;
+   the desktop card is kept as-is. */
+.summary-brief {
   display: none;
+}
+
+.summary-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  background: var(--bulma-scheme-main);
+  box-shadow: var(--soft-shadow);
+  cursor: pointer;
+  list-style: none;
+}
+
+.summary-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.summary-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.summary-caret {
+  flex: none;
+  margin-left: auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  opacity: 0.6;
+}
+
+.summary-brief[open] .summary-caret {
+  transform: rotate(225deg);
 }
 
 .ring {
@@ -752,10 +792,19 @@ body {
     margin-bottom: 1rem;
   }
 
-  .day-glance {
+  .summary-brief {
     display: block;
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .summary-full {
+    display: none;
+  }
+
+  /* The plaque owns only the toggle: the full card stays a sibling, so the
+     page renders one set of rings instead of two copies. */
+  .summary-brief[open] + .summary-full {
+    display: block;
   }
 
   .summary .day-total {

@@ -1,0 +1,24 @@
+{% load nutrition %}
+{% comment %}Полная Сводка дня: кольцо ккал, остаток и макро-кольца; на мобильном живёт внутри раскрытия.{% endcomment %}
+{% if rings %}
+  {% with kcal=rings.0 %}
+    {% include "components/ring.html" with ring=kcal size=200 stroke=8 r=46 color="var(--kcal)" big=True %}
+    <p class="mt-4 muted">
+      {% if kcal.over %}Сверх цели на <b class="has-text-danger">{{ kcal.value|sub:kcal.goal|whole }}</b> ккал{% else %}Осталось <b>{{ kcal.goal|sub:kcal.value|whole }}</b> ккал{% endif %}
+    </p>
+  {% endwith %}
+  <div class="macros">
+    {% for ring in rings|slice:"1:" %}
+      <div class="item">
+        {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
+        {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
+        <span class="is-size-7 muted unit-pair">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
+      </div>
+    {% endfor %}
+  </div>
+  <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
+{% else %}
+  <p class="muted">Цель не задана</p>
+  <a class="btn-quiet mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+  <p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>
+{% endif %}
