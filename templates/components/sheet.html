@@ -1,7 +1,18 @@
 {% comment %}Шторка: снизу на телефоне, модалка на десктопе. Хозяин страницы — `x-data="sheetHost"` (static/js/sheet.js). Контекст: `label`.{% endcomment %}
 <div class="sheet-backdrop" x-show="sheetOpen" x-cloak @click="closeSheet()"></div>
 <aside class="sheet" x-show="sheetOpen" x-cloak role="dialog" aria-modal="true" aria-label="{{ label }}">
-  <button type="button" class="btn-quiet sheet-close" @click="closeSheet()" aria-label="Закрыть">{% include "components/icons/x.html" %}</button>
+  <button type="button" class="btn-quiet sheet-close" :inert="confirming" @click="closeSheet()" aria-label="Закрыть">{% include "components/icons/x.html" %}</button>
+  <div class="sheet-confirm" x-show="confirming" x-cloak role="alertdialog"
+       aria-labelledby="sheet-confirm-title" aria-describedby="sheet-confirm-note" @click.self="cancelClose()">
+    <div class="sheet-confirm-card">
+      <p id="sheet-confirm-title" class="sheet-state-title">Закрыть без сохранения?</p>
+      <p id="sheet-confirm-note" class="muted mb-2">Введённое в форме не сохранится.</p>
+      <div class="sheet-confirm-actions">
+        <button type="button" class="btn-main" x-ref="confirmKeep" @click="cancelClose()">Продолжить редактирование</button>
+        <button type="button" class="btn-quiet danger-action" @click="closeSheet(true)">Закрыть без сохранения</button>
+      </div>
+    </div>
+  </div>
   <div id="sheet-loading" class="sheet-state" x-show="loading" x-cloak role="status">
     <span class="sheet-spinner" aria-hidden="true"></span>
     <p class="muted mb-0">Загружаем форму…</p>
@@ -9,10 +20,10 @@
   <div id="sheet-error" class="sheet-state sheet-state-error" x-show="error" x-cloak role="alert" tabindex="-1">
     <p class="sheet-state-title" x-show="retryable">Форма не загрузилась</p>
     <p class="muted mb-0" x-show="retryable">Проверьте подключение и попробуйте ещё раз. Введённое сохранится.</p>
-    <p class="sheet-state-title" x-show="!retryable">Результат неясен</p>
-    <p class="muted mb-0" x-show="!retryable">Связь прервалась до ответа. Проверьте, применилось ли изменение; если нет — отправьте форму ещё раз.</p>
+    <p class="sheet-state-title" x-show="!retryable">Связь прервалась</p>
+    <p class="muted mb-0" x-show="!retryable">Проверьте, применилось ли изменение; если нет — отправьте форму ещё раз.</p>
     <button type="button" class="button is-primary is-small" x-show="retryable" @click="retry()">Попробовать снова</button>
   </div>
-  <div id="sheet-body" x-show="!loading" :aria-busy="loading ? 'true' : 'false'" aria-busy="false"
+  <div id="sheet-body" x-show="!loading" :inert="confirming" :aria-busy="loading ? 'true' : 'false'" aria-busy="false"
        @input="if ($event.target.closest('[data-guard]')) dirty = true"></div>
 </aside>

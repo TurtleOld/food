@@ -13,12 +13,19 @@
         {% cycle "var(--p)" "var(--f)" "var(--c)" as macro_color silent %}
         {% include "components/ring.html" with size=68 stroke=10 r=45 color=macro_color big=False %}
         <span class="is-size-7 muted unit-pair">{{ ring.label }} · {{ ring.goal|one_decimal }} г</span>
+        {% if ring.over %}
+          <span class="is-size-7 over-goal unit-pair">сверх {{ ring.value|sub:ring.goal|one_decimal }} г</span>
+        {% else %}
+          <span class="is-size-7 muted unit-pair">осталось {{ ring.goal|sub:ring.value|one_decimal }} г</span>
+        {% endif %}
       </div>
     {% endfor %}
   </div>
-  <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}">Изменить цель</a>
+  <a class="btn-quiet mt-4" href="{% url 'core:daily_target_edit' %}"
+     hx-get="{% url 'core:daily_target_edit' %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Изменить цель</a>
 {% else %}
   <p class="muted mb-2">Цель не задана — без Суточной цели кольцу не с чем сравнивать день.</p>
-  <a class="btn-main mt-2" href="{% url 'core:daily_target_edit' %}">Задать цель</a>
+  <a class="btn-main mt-2" href="{% url 'core:daily_target_edit' %}"
+     hx-get="{% url 'core:daily_target_edit' %}" hx-target="#sheet-body" hx-swap="innerHTML" @click="openSheet($event)">Задать цель</a>
   <p class="day-total mt-4 mb-0">{% include "components/day_total.html" %}</p>
 {% endif %}

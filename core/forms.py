@@ -290,6 +290,13 @@ class DailyTargetForm(forms.ModelForm):
         model = DailyTarget
         fields = NUTRITION_FIELDS
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        # «120,5» — обычная русская запись, поэтому поля принимают запятую,
+        # как и остальные числа в интерфейсе.
+        for name in NUTRITION_FIELDS:
+            self.fields[name].localize = True
+
     def clean(self) -> dict[str, Any] | None:
         cleaned_data = super().clean()
         if cleaned_data is None:

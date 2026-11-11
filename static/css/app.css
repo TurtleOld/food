@@ -22,6 +22,9 @@
   --c: hsl(330 60% 62%);
   --bulma-text-weak: hsl(221 14% 42%);
   --focus-ring: hsl(221 14% 21%);
+  /* Bulma's default danger (L 70%) читается на белом как 2,8:1 — ниже AA.
+     Красный остаётся сигналом ошибки, но текст ошибок и «Удалить» темнее. */
+  --danger-text: hsl(348 80% 38%);
   color-scheme: light dark;
 }
 
@@ -32,6 +35,7 @@
     --over-goal: hsl(38 85% 62%);
     --bulma-text-weak: hsl(221 14% 60%);
     --focus-ring: hsl(221 14% 93%);
+    --danger-text: hsl(348 90% 74%);
     --soft-shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 10px 30px hsl(0 0% 0% / 0.35);
   }
 }
@@ -62,6 +66,16 @@ body {
   border-radius: var(--bulma-radius-large);
 }
 
+@media (prefers-color-scheme: dark) {
+  /* На тёмной подложке заливка карточки почти совпадает с фоном страницы,
+     поэтому карточку отделяет тонкая граница, а не только тень. */
+  .box,
+  .card,
+  .summary-toggle {
+    border: 1px solid var(--bulma-border-weak);
+  }
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }
@@ -77,6 +91,13 @@ body {
   color: var(--bulma-text-weak);
 }
 
+/* Ошибки и разрушительные действия берут общий --danger-text: Bulma-классы
+   .help.is-danger и .has-text-danger иначе остаются на 2,8:1. */
+.help.is-danger,
+.has-text-danger {
+  color: var(--danger-text) !important;
+}
+
 .over-goal {
   color: var(--over-goal);
 }
@@ -84,7 +105,9 @@ body {
 .btn-quiet {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
+  min-height: 2.75rem;
   border: 0;
   background: none;
   cursor: pointer;
@@ -156,7 +179,7 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.45rem 0.8rem;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   border-radius: 999px;
   color: var(--bulma-text-weak);
   font-size: 0.9rem;
@@ -204,7 +227,7 @@ body {
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0.25rem 0.55rem 0.25rem 0.3rem;
   border-radius: 999px;
   color: var(--bulma-text-strong);
@@ -253,7 +276,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0.45rem 0.65rem;
   border: 0;
   border-radius: 999px;
@@ -380,7 +403,7 @@ body {
 }
 
 .toast.is-error {
-  color: var(--bulma-danger);
+  color: var(--danger-text);
 }
 
 .goal-row {
@@ -449,7 +472,7 @@ body {
     "prev title next"
     "actions actions actions";
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
@@ -465,15 +488,17 @@ body {
 }
 
 .date-actions {
+  position: relative;
   grid-area: actions;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .date-step {
+  position: relative;
   grid-area: prev;
   display: inline-grid;
   place-items: center;
@@ -482,6 +507,18 @@ body {
   border-radius: 999px;
   color: var(--bulma-text);
   font-size: 1.35rem;
+}
+
+/* Точка говорит, что в соседний день уже что-то записано; пустой день
+   остаётся спокойным, а подпись для скринридера называет факт словами. */
+.date-step-mark {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.3rem;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--kcal);
 }
 
 .date-step:hover,
@@ -585,6 +622,65 @@ body {
   transform: rotate(225deg);
 }
 
+/* Постоянная справка под сводкой: нативный disclosure, доступен в любой день
+   и не занимает место, пока его не раскрыли. */
+.day-help {
+  margin: -0.75rem 0 1.5rem;
+}
+
+.day-help-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  color: var(--bulma-text-weak);
+  font-size: 0.9rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.day-help-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.day-help-toggle::before {
+  content: "?";
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.day-help-toggle:hover {
+  color: var(--bulma-text-strong);
+}
+
+.day-help-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.day-help-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.6rem;
+  color: var(--bulma-text-weak);
+  font-size: 0.85rem;
+}
+
+.day-help-list li + li {
+  margin-top: 0.35rem;
+}
+
+.day-help-list b {
+  color: var(--bulma-text-strong);
+}
+
 .ring {
   position: relative;
   display: inline-block;
@@ -634,7 +730,8 @@ body {
 .macros .item {
   display: grid;
   justify-items: center;
-  gap: 0.4rem;
+  gap: 0.2rem;
+  line-height: 1.3;
 }
 
 .quick-add {
@@ -764,9 +861,11 @@ body {
   font-weight: 600;
 }
 
+/* Одна цель нажатия у каждой строки «добавить», включая пустой Приём пищи. */
 .add-meal {
-  display: block;
-  padding: 0.6rem 0;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
   color: var(--bulma-text-weak);
 }
 
@@ -779,12 +878,6 @@ body {
 
 .meal-repeat {
   font-size: 0.8rem;
-}
-
-.meal-actions .add-meal {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
 }
 
 .add-meal:hover {
@@ -988,6 +1081,33 @@ body:has(.login) {
   right: 0.75rem;
 }
 
+/* Подтверждение закрытия живёт внутри шторки: фон под ним затемнён, а форма
+   становится inert, поэтому Tab ходит только по двум ответам. */
+.sheet-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: hsl(220 30% 10% / 0.45);
+}
+
+.sheet-confirm-card {
+  width: min(100%, 24rem);
+  padding: 1.25rem;
+  border-radius: var(--bulma-radius-large);
+  background: var(--bulma-scheme-main);
+  box-shadow: var(--soft-shadow);
+  text-align: center;
+}
+
+.sheet-confirm-actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
 /* Loading a new sheet step hides the previous form, so the drawer keeps its
    size with a state block instead of old controls that are about to vanish. */
 .sheet-state {
@@ -1089,6 +1209,14 @@ body:has(.login) {
   font-size: 0.9rem;
 }
 
+/* Чипы-действия (граммовки и Приёмы пищи) — цель 44 px; бейдж «в каталоге»
+   в строке поиска остаётся компактным. */
+.quick-amounts .chip,
+.chips .chip {
+  justify-content: center;
+  min-height: 2.75rem;
+}
+
 .chip input {
   position: absolute;
   opacity: 0;
@@ -1126,6 +1254,26 @@ body:has(.login) {
   display: grid;
   gap: 0.25rem;
   margin-top: 1rem;
+}
+
+/* Второстепенные действия шторки Записи отделены от «Сохранить»: строки
+   переиспользуют .btn-quiet, удаление последнее и в общем danger-цвете. */
+.entry-secondary {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bulma-border-weak);
+}
+
+.danger-action {
+  color: var(--danger-text);
+}
+
+.danger-action:hover {
+  color: var(--danger-text);
+  text-decoration: underline;
 }
 
 .result {

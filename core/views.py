@@ -135,10 +135,19 @@ def _day_context(
 ) -> dict[str, Any]:
     """Собирает контекст страницы дня и её фрагмента `feed`."""
     summary = day_summary(member, current_date)
+    previous_date = current_date - datetime.timedelta(days=1)
+    next_date = current_date + datetime.timedelta(days=1)
+    neighbour_entries = set(
+        DiaryEntry.objects.filter(
+            member_id=getattr(member, "pk", None), date__in=(previous_date, next_date)
+        ).values_list("date", flat=True)
+    )
     return {
         "current_date": current_date,
-        "previous_date": current_date - datetime.timedelta(days=1),
-        "next_date": current_date + datetime.timedelta(days=1),
+        "previous_date": previous_date,
+        "next_date": next_date,
+        "previous_has_entries": previous_date in neighbour_entries,
+        "next_has_entries": next_date in neighbour_entries,
         "today": datetime.date.today(),
         "meals": summary.meals,
         "meal_rows": meal_rows(summary.meals),
@@ -702,11 +711,12 @@ class UndoView(HtmxLoginRequiredMixin, View):
         return response
 
 
-class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
+class DailyTargetUpdateView(HtmxLoginRequiredMixin, FragmentMixin, UpdateView):
     """Редактирует собственную Суточную цель участника, создавая её при первом сохранении."""
 
     form_class = DailyTargetForm
     template_name = "core/daily_target_form.html"
+    fragment_template_name = "core/daily_target_form.html#form"
     success_url = reverse_lazy("core:day")
 
     def get_object(self, queryset: QuerySet[DailyTarget] | None = None) -> DailyTarget | None:
@@ -715,7 +725,12 @@ class DailyTargetUpdateView(HtmxLoginRequiredMixin, UpdateView):
     def form_valid(self, form: ModelForm[Any]) -> HttpResponse:
         form.instance.member = self.request.user
         messages.success(self.request, "Цель сохранена")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        # Из шторки цель правят без ухода со страницы дня: htmx перезагружает
+        # её целиком, поэтому кольца и плашка получают новые цели сразу.
+        if self.request.htmx:  # type: ignore[attr-defined]
+            return HttpResponseClientRedirect(self.get_success_url())
+        return response
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)

@@ -61,6 +61,16 @@ class DailyTargetEditTest(TestCase):
         self.assertContains(response, "больше нуля")
         self.assertFalse(DailyTarget.objects.exists())
 
+    def test_comma_decimals_are_accepted_like_the_rest_of_the_ui(self):
+        self.client.post(
+            self._edit_url(),
+            {"calories": "2100,5", "proteins": "120,5", "fats": "70", "carbs": "220"},
+        )
+
+        target = DailyTarget.objects.get()
+        self.assertEqual(target.calories, Decimal("2100.5"))
+        self.assertEqual(target.proteins, Decimal("120.5"))
+
     def test_negative_value_is_rejected(self):
         response = self.client.post(
             self._edit_url(),
@@ -138,7 +148,7 @@ class DailyTargetProgressTest(TestCase):
 
         response = self.client.get(reverse("core:daily_target_edit"))
 
-        self.assertContains(response, "2000.0")
+        self.assertContains(response, "2000,0")
 
 
 class DailyTargetPageTest(TestCase):
@@ -187,3 +197,44 @@ class DailyTargetPageTest(TestCase):
         )
 
         self.assertContains(response, "Цель сохранена")
+
+
+class DailyTargetSheetTest(TestCase):
+    """Цель правится из шторки на странице дня, а не уводит на отдельную страницу."""
+
+    def setUp(self):
+        self.member = User.objects.create_user(username="alice", password="s3cret-pass")
+        self.client.force_login(self.member)
+        self.url = reverse("core:daily_target_edit")
+
+    def test_htmx_open_returns_only_the_form_fragment(self):
+        response = self.client.get(self.url, HTTP_HX_REQUEST="true")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="id_calories"')
+        self.assertContains(response, "Суточная цель")
+        self.assertContains(response, "hx-post=")
+        self.assertNotContains(response, "<html")
+        self.assertNotContains(response, ">Отмена<")
+
+    def test_htmx_save_updates_target_and_redirects_the_day_page(self):
+        response = self.client.post(
+            self.url,
+            {"calories": "2100", "proteins": "125", "fats": "72", "carbs": "230"},
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response["HX-Redirect"], reverse("core:day"))
+        target = DailyTarget.objects.get(member=self.member)
+        self.assertEqual(target.calories, Decimal("2100.0"))
+
+    def test_htmx_validation_errors_return_the_form_fragment(self):
+        response = self.client.post(
+            self.url,
+            {"calories": "0", "proteins": "125", "fats": "72", "carbs": "230"},
+            HTTP_HX_REQUEST="true",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "больше нуля")
+        self.assertFalse(DailyTarget.objects.exists())
