@@ -219,7 +219,7 @@ class WeightMeasurementTest(TestCase):
         response = self.client.get(self.url)
 
         content = response.content.decode()
-        self.assertLess(content.index("90.0"), content.index("80.0"))
+        self.assertLess(content.index("90,0"), content.index("80,0"))
 
     def test_other_members_weight_is_not_shown(self):
         WeightMeasurement.objects.create(
@@ -230,7 +230,7 @@ class WeightMeasurementTest(TestCase):
 
         response = self.client.get(self.url)
 
-        self.assertNotContains(response, "123.4")
+        self.assertNotContains(response, "123,4")
 
     def test_bmi_uses_the_latest_measurement(self):
         self.client.post(self.url, {"height_cm": "180"})
@@ -241,8 +241,8 @@ class WeightMeasurementTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertContains(response, "ИМТ")
-        self.assertContains(response, "27.8")
-        self.assertNotContains(response, "24.7")
+        self.assertContains(response, "27,8")
+        self.assertNotContains(response, "24,7")
 
 
 class TargetSuggestionTest(TestCase):
@@ -497,5 +497,5 @@ class TargetSuggestionTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertContains(response, "Текущая цель")
-        self.assertContains(response, "2000.0")
+        self.assertContains(response, "2000,0</b> ккал")
         self.assertContains(response, "заменит")

@@ -224,9 +224,28 @@ class DayPageTotalsTest(TestCase):
         response = self.client.get(reverse("core:day"))
 
         self.assertContains(response, "165 <small")
-        self.assertContains(response, "Б 31.0")
-        self.assertContains(response, "Ж 3.6")
-        self.assertContains(response, "У 0.0")
+        self.assertContains(response, "Б 31,0 г")
+        self.assertContains(response, "Ж 3,6 г")
+        self.assertContains(response, "У 0,0 г")
+
+    def test_fractional_display_keeps_snapshot_and_exact_calculation(self):
+        entry = DiaryEntry.objects.create(
+            member=self.member,
+            date=self.today,
+            meal_type=DiaryEntry.MealType.LUNCH,
+            product=self.chicken,
+            amount=Decimal("33"),
+        )
+
+        response = self.client.get(reverse("core:day"))
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.proteins_snapshot, Decimal("31.0"))
+        self.assertEqual(entry.fats_snapshot, Decimal("3.6"))
+        self.assertEqual(entry.proteins, Decimal("10.23"))
+        self.assertContains(response, "Б 10,2 г")
+        self.assertContains(response, "Ж 1,2 г")
+        self.assertContains(response, "У 0,0 г")
 
 
 class DiaryEntryEditTest(TestCase):

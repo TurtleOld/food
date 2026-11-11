@@ -8,7 +8,7 @@
           {% if request.htmx %}x-data hx-post="{{ request.path }}" hx-target="#form" hx-swap="outerHTML"{% endif %}>
       {% csrf_token %}
       <h2 class="title is-4 mb-1">{{ entry.product.name }}</h2>
-      <p class="muted is-size-7 mb-4">КБЖУ на {{ entry.amount|unlocalize }} {{ entry.product.get_base_unit_display }} считается по записи, а не по Каталогу</p>
+      <p class="muted is-size-7 mb-4">КБЖУ на <span class="unit-pair">{{ entry.amount }} {{ entry.product.get_base_unit_display }}</span> считается по записи, а не по Каталогу</p>
 
       {{ form.non_field_errors }}
       <div class="amount">
@@ -20,7 +20,7 @@
       {% for error in form.amount.errors %}<p class="help is-danger">{{ error }}</p>{% endfor %}
       <div class="quick-amounts">
         {% if last_amount %}
-          <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|floatformat:"-1u" }}</button>
+          <button type="button" class="chip" data-amount="{{ last_amount|floatformat:"-1u" }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">последнее · {{ last_amount|one_decimal }}</button>
         {% endif %}
         {% for amount in quick_amounts %}
           <button type="button" class="chip" data-amount="{{ amount }}" @click="$refs.amount.value = $el.dataset.amount; $refs.amount.dispatchEvent(new Event('input', {bubbles: true}))">{{ amount }}</button>
@@ -28,12 +28,7 @@
       </div>
 
       {% partialdef macros inline %}
-      <div id="macros" class="macros-row num">
-        <span class="macro" style="--dot: var(--kcal)"><b>{% if macros %}{{ macros.calories|whole }}{% else %}—{% endif %}</b> ккал</span>
-        <span class="macro" style="--dot: var(--p)"><b>{% if macros %}{{ macros.proteins|one_decimal }}{% else %}—{% endif %}</b> Б</span>
-        <span class="macro" style="--dot: var(--f)"><b>{% if macros %}{{ macros.fats|one_decimal }}{% else %}—{% endif %}</b> Ж</span>
-        <span class="macro" style="--dot: var(--c)"><b>{% if macros %}{{ macros.carbs|one_decimal }}{% else %}—{% endif %}</b> У</span>
-      </div>
+      {% include "components/macros.html" %}
       {% endpartialdef %}
 
       <div class="chips" role="radiogroup" aria-label="Приём пищи">

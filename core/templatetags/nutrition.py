@@ -13,8 +13,8 @@ def whole(value: Decimal) -> str:
 
 @register.filter
 def one_decimal(value: Decimal) -> str:
-    """Выводит значение КБЖУ с одним знаком после запятой без учёта локали."""
-    return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+    """Выводит значение КБЖУ с одним знаком и запятой как десятичным разделителем."""
+    return str(value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)).replace(".", ",")
 
 
 @register.filter

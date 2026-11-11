@@ -53,6 +53,13 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Число и его единица переносятся только вместе — на узком телефоне «7,2» не отрывается от «г». */
+.unit-pair,
+.entry-kcal,
+.macro {
+  white-space: nowrap;
+}
+
 .muted {
   color: var(--bulma-text-weak);
 }
@@ -263,7 +270,10 @@ body {
 .topbar-link:focus-visible,
 .profile-chip:focus-visible,
 .logout-button:focus-visible,
-.tabbar a:focus-visible {
+.tabbar a:focus-visible,
+.date-step:focus-visible,
+.date-pick:focus-visible,
+.date-copy:focus-visible {
   outline: 2px solid var(--kcal);
   outline-offset: 2px;
 }
@@ -425,24 +435,95 @@ body {
   display: block;
 }
 
+/* The title owns the first row between the arrows, and the date actions own
+   the full-width second row: at 200% text zoom the centre column would
+   otherwise squeeze the title to one letter per line. The 44px targets stay
+   in CSS pixels, so text zoom does not widen the arrows past their hit area. */
 .datebar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "prev title next"
+    "actions actions actions";
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 1.5rem;
 }
 
 .datebar .day {
-  text-align: center;
+  display: contents;
 }
 
-.datebar .date-pick {
+.datebar .day > .title {
+  grid-area: title;
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.date-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.date-step {
+  grid-area: prev;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: var(--bulma-text);
+  font-size: 1.35rem;
+}
+
+.date-step:hover,
+.date-pick:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+}
+
+.date-step-next {
+  grid-area: next;
+}
+
+.date-step-next .icon {
+  transform: rotate(180deg);
+}
+
+.date-pick,
+.date-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--bulma-text);
+  font: inherit;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.date-pick {
   border: 0;
   background: none;
-  color: var(--bulma-text-weak);
-  font: inherit;
-  font-size: 0.85rem;
   cursor: pointer;
+}
+
+/* The copy action gets an outline so it does not read as the date value. */
+.date-copy {
+  box-shadow: inset 0 0 0 1px var(--bulma-border-weak);
+  font-size: 0.9rem;
+}
+
+.date-copy:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
 }
 
 .datebar .date-native {
@@ -457,12 +538,20 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.day-glance {
+  display: none;
+}
+
 .ring {
   position: relative;
   display: inline-block;
+  width: var(--ring-size);
+  height: var(--ring-size);
 }
 
 .ring svg {
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
@@ -507,18 +596,61 @@ body {
 
 .quick-add {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
 }
 
-.quick-add-prompt {
+.btn-main.quick-add-action {
   flex: 1;
-  padding: 0.8rem 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: auto;
+  min-height: 3rem;
+  border-radius: 999px;
+  text-align: center;
+  box-shadow: var(--soft-shadow);
+}
+
+.quick-add-action .icon {
+  flex: none;
+  font-size: 1.35rem;
+}
+
+.quick-add-action:hover {
+  filter: brightness(1.04);
+}
+
+.quick-add-action:active {
+  transform: scale(0.99);
+}
+
+.quick-add-scan {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3rem;
+  min-height: 3rem;
   border-radius: 999px;
   background: var(--bulma-scheme-main);
-  box-shadow: var(--soft-shadow);
   color: var(--bulma-text-weak);
+  box-shadow: var(--soft-shadow);
+}
+
+.quick-add-scan .icon {
+  font-size: 1.45rem;
+}
+
+.quick-add-scan:hover {
+  color: var(--bulma-text-strong);
+}
+
+.quick-add-scan:focus-visible,
+.quick-add-action:focus-visible {
+  outline: 2px solid var(--bulma-text-strong);
+  outline-offset: 2px;
 }
 
 .timeline {
@@ -556,6 +688,13 @@ body {
 .meal-row.is-empty > .node {
   background: var(--bulma-border);
   top: 0.95rem;
+}
+
+/* Empty meals are headings too, so heading navigation lists all five; keep the
+   link looking like the row it was before. */
+.meal-row.is-empty > h2 {
+  margin: 0;
+  font: inherit;
 }
 
 .entry {
@@ -612,6 +751,34 @@ body {
   gap: 1rem;
 }
 
+/* The phone opens on the day, the add action and the day's total, so the
+   total is repeated at the top of the summary and the detailed ring gives up
+   height without losing any number. */
+@media (max-width: 1023px) {
+  .quick-add {
+    margin-bottom: 1rem;
+  }
+
+  .day-glance {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .summary .day-total {
+    display: none;
+  }
+
+  .summary > .ring {
+    width: 10rem;
+    height: 10rem;
+  }
+
+  .summary .macros {
+    margin-top: 1rem;
+  }
+}
+
 @media (min-width: 1024px) {
   .feed-block {
     display: contents;
@@ -626,6 +793,11 @@ body {
 
   .datebar {
     grid-column: 1;
+  }
+
+  .quick-add {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   /* The summary column spans the feed's height, so the sticky card can follow
@@ -760,6 +932,66 @@ body:has(.login) {
   right: 0.75rem;
 }
 
+/* Loading a new sheet step hides the previous form, so the drawer keeps its
+   size with a state block instead of old controls that are about to vanish. */
+.sheet-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 12rem;
+  text-align: center;
+}
+
+.sheet-spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid var(--ring-track);
+  border-top-color: var(--kcal);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-spinner {
+    animation: sheet-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes sheet-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.sheet-state-error {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.35rem;
+  min-height: 0;
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--bulma-danger) 30%, var(--bulma-scheme-main));
+  border-radius: var(--bulma-radius);
+  background: color-mix(in srgb, var(--bulma-danger) 7%, var(--bulma-scheme-main));
+}
+
+.sheet-state-title {
+  margin-bottom: 0;
+  font-weight: 600;
+}
+
+.sheet-state-error .button {
+  margin-top: 0.35rem;
+}
+
+/* Фокус на панели — только чтобы скринридер прочитал «Результат неясен»;
+   панель не интерактивна. */
+.sheet-state-error:focus {
+  outline: none;
+}
+
 @media (min-width: 1024px) {
   .sheet {
     inset: 50% auto auto 50%;
@@ -828,7 +1060,8 @@ body:has(.login) {
 
 .macros-row {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
   margin: 1rem 0;
 }
 
