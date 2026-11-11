@@ -332,14 +332,53 @@ class DayPageLanguageDTest(TestCase):
             response, f'class="btn-main mt-2" href="{reverse("core:daily_target_edit")}"'
         )
 
-    def test_date_button_falls_back_when_show_picker_is_missing(self):
+    def test_date_button_opens_a_calendar_without_native_picker(self):
         response = self.client.get(reverse("core:day"))
 
-        button = re.search(r'<button[^>]*class="date-pick"[^>]*>', response.content.decode())
-        assert button is not None
+        self.assertContains(response, 'aria-haspopup="dialog"')
+        self.assertContains(response, 'aria-controls="date-calendar"')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, 'id="date-calendar"')
+        self.assertContains(response, 'role="dialog" aria-label="Выбор даты"')
+        self.assertContains(response, f'data-selected="{self.today.isoformat()}"')
+        self.assertNotContains(response, 'class="date-native"')
 
-        self.assertIn("showPicker", button.group(0))
-        self.assertIn(".click()", button.group(0))
+    def test_calendar_names_its_navigation_and_the_shown_day(self):
+        day = datetime.date(2026, 3, 10)
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, 'aria-label="Предыдущий месяц"')
+        self.assertContains(response, 'aria-label="Следующий месяц"')
+        self.assertContains(response, 'aria-label="Закрыть календарь"')
+        self.assertContains(response, f'data-selected="{day.isoformat()}"')
+
+    def test_day_on_shows_the_diary_of_the_selected_date(self):
+        day = self.today - datetime.timedelta(days=3)
+        self._eat()
+        oats = Product.objects.create(
+            name="Овсянка",
+            base_unit=Product.BaseUnit.GRAM,
+            calories=Decimal("370.0"),
+            proteins=Decimal("13.0"),
+            fats=Decimal("6.0"),
+            carbs=Decimal("62.0"),
+            author=self.member,
+        )
+        DiaryEntry.objects.create(
+            member=self.member,
+            date=day,
+            meal_type=DiaryEntry.MealType.BREAKFAST,
+            product=oats,
+            amount=Decimal("80"),
+        )
+
+        response = self.client.get(reverse("core:day_on", args=[day.isoformat()]))
+
+        self.assertContains(response, f'data-selected="{day.isoformat()}"')
+        self.assertContains(response, date_format(day, "j E Y"))
+        self.assertContains(response, "Овсянка")
+        self.assertNotContains(response, "Куриная грудка")
 
     def test_date_input_carries_current_day_and_arrows_switch_days(self):
         day = datetime.date(2026, 3, 10)

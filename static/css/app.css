@@ -550,6 +550,7 @@ body {
 }
 
 .date-pick {
+  gap: 6px;
   border: 0;
   background: none;
   cursor: pointer;
@@ -566,12 +567,116 @@ body {
   color: var(--bulma-text-strong);
 }
 
-.datebar .date-native {
+/* Calendar popover: it replaces the hidden native date input, so it must fit
+   beside the date button on a 320px phone without widening the page. */
+.calendar {
   position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-  pointer-events: none;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: min(21.5rem, calc(100vw - 2rem));
+  padding: 0.75rem;
+  border-radius: 1rem;
+  background: var(--bulma-scheme-main);
+  box-shadow: 0 12px 32px hsl(220 30% 15% / 0.18);
+  transform: translateX(-50%);
+}
+
+.calendar-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+  align-items: center;
+  gap: 0.25rem;
+  /* Место под кнопку закрытия: она стоит справа и не участвует в сетке,
+     иначе на узком экране заголовок месяца сжимается в ноль. */
+  padding-right: 2.75rem;
+}
+
+.calendar-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.calendar-nav,
+.calendar-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--bulma-text);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.calendar-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.calendar-nav-next .icon {
+  transform: rotate(180deg);
+}
+
+.calendar-nav:hover,
+.calendar-close:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays span {
+  padding: 0.35rem 0;
+  color: var(--bulma-text-weak);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.calendar-grid {
+  gap: 2px;
+}
+
+.calendar-day {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border-radius: 0.55rem;
+  color: var(--bulma-text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.calendar-day:hover {
+  background: var(--bulma-background);
+  color: var(--bulma-text-strong);
+}
+
+.calendar-day.is-outside {
+  color: var(--bulma-text-weak);
+}
+
+.calendar-day.is-today {
+  box-shadow: inset 0 0 0 2px var(--bulma-primary);
+}
+
+.calendar-day.is-selected,
+.calendar-day.is-selected:hover {
+  background: var(--bulma-primary);
+  color: var(--bulma-primary-invert);
+  font-weight: 600;
 }
 
 .summary {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load nutrition carry %}
+{% load static nutrition carry %}
 
 {% block content %}
   <div class="day-layout" x-data="sheetHost" @keydown.tab.window="trapFocus($event)" @sheet:close.window="closeSheet(true)">
@@ -7,14 +7,37 @@
       <a class="date-step{% if previous_has_entries %} has-entries{% endif %}" href="{% url 'core:day_on' previous_date.isoformat %}" aria-label="Предыдущий день{% if previous_has_entries %}, есть записи{% endif %}">{% include "components/icons/chevron-left.html" %}{% if previous_has_entries %}<span class="date-step-mark" aria-hidden="true"></span>{% endif %}</a>
       <div class="day">
         <h1 class="title is-4 mb-0">{% if current_date == today %}Сегодня{% else %}{{ current_date|date:"l" }}{% endif %}<span class="is-sr-only">, {{ current_date|date:"j E Y" }}</span></h1>
-        <div class="date-actions" x-data>
-          <button type="button" class="date-pick" @click="try { $refs.picker.showPicker() } catch { $refs.picker.focus(); $refs.picker.click() }"
-                  aria-label="Изменить дату: {{ current_date|date:'d.m.Y' }}">{{ current_date|date:"d.m.Y" }}</button>
+        <div class="date-actions" x-data="dateCalendar"
+             data-selected="{{ current_date.isoformat }}" data-today="{{ today.isoformat }}"
+             data-day-url="{% url 'core:day_on' '0000-00-00' %}"
+             @keydown.escape.stop="close()">
+          <button type="button" class="date-pick" x-ref="trigger" @click="toggle()"
+                  aria-label="Изменить дату: {{ current_date|date:'d-m-Y' }}"
+                  aria-haspopup="dialog" aria-expanded="false" :aria-expanded="open ? 'true' : 'false'"
+                  aria-controls="date-calendar">{% include "components/icons/calendar.html" %}<span>{{ current_date|date:"d-m-Y" }}</span></button>
           <a class="date-copy" href="{% url 'core:diary_copy' current_date.isoformat %}"
              hx-get="{% url 'core:diary_copy' current_date.isoformat %}" hx-target="#sheet-body" hx-swap="innerHTML"
              @click="openSheet($event)" aria-label="Повторить день">Повторить день</a>
-          <input x-ref="picker" class="date-native" type="date" value="{{ current_date.isoformat }}" aria-hidden="true" tabindex="-1"
-                 onchange="if (this.value) location.href = '{% url 'core:day_on' '0000-00-00' %}'.replace('0000-00-00', this.value)">
+          <div id="date-calendar" class="calendar" x-ref="calendar" x-show="open" x-cloak
+               role="dialog" aria-label="Выбор даты" @focusout="onFocusOut($event)">
+            <div class="calendar-head">
+              <button type="button" class="calendar-nav" @click="stepMonth(-1)" aria-label="Предыдущий месяц">{% include "components/icons/chevron-left.html" %}</button>
+              <div class="calendar-title" aria-live="polite" x-text="title"></div>
+              <button type="button" class="calendar-nav calendar-nav-next" @click="stepMonth(1)" aria-label="Следующий месяц">{% include "components/icons/chevron-left.html" %}</button>
+              <button type="button" class="calendar-close" @click="close()" aria-label="Закрыть календарь">{% include "components/icons/x.html" %}</button>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+            </div>
+            <div class="calendar-grid" x-ref="grid" @keydown="onKeydown($event)">
+              <template x-for="cell in cells" :key="cell.iso">
+                <a class="calendar-day" :class="{ 'is-outside': !cell.inMonth, 'is-today': cell.isToday, 'is-selected': cell.isSelected }"
+                   :href="cell.href" :data-date="cell.iso" :tabindex="cell.tabbable ? 0 : -1"
+                   :aria-label="cell.label" :aria-current="cell.isSelected ? 'date' : null"
+                   x-text="cell.day" @focus="focusIso = cell.iso"></a>
+              </template>
+            </div>
+          </div>
         </div>
       </div>
       <a class="date-step date-step-next{% if next_has_entries %} has-entries{% endif %}" href="{% url 'core:day_on' next_date.isoformat %}" aria-label="Следующий день{% if next_has_entries %}, есть записи{% endif %}">{% include "components/icons/chevron-left.html" %}{% if next_has_entries %}<span class="date-step-mark" aria-hidden="true"></span>{% endif %}</a>
@@ -103,3 +126,5 @@
     {% include "components/sheet.html" with label="Запись" %}
   </div>
 {% endblock %}
+
+{% block scripts %}<script src="{% static 'js/calendar.js' %}"></script>{% endblock %}
